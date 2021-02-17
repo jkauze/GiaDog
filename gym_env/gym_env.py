@@ -131,6 +131,10 @@ class Quadruped_Control(gym.Env):
 
 		self.camera_settings = settings['camera_settings'] 
 
+		self.video = []
+
+		self.record =  settings['record'] # booelan: if True, each step of the simulation an image would be redered and appended to self.video according to settings['camera_settings']. Thi is mainly for colab/jupyter use.
+
 
 
 
@@ -196,7 +200,7 @@ class Quadruped_Control(gym.Env):
 			p.setJointMotorControlArray(
 			bodyUniqueId = self.spot, 
 			jointIndices = self.actuated_joints_ids,
-			controlMode = self.control_mode, #p.VELOCITY_CONTROL,
+			controlMode = self.control_mode,
 			targetVelocities = action,
 			forces = self.actuated_force_limits,
 			)
@@ -206,7 +210,7 @@ class Quadruped_Control(gym.Env):
 			p.setJointMotorControlArray(
 			bodyUniqueId = self.spot, 
 			jointIndices = self.actuated_joints_ids,
-			controlMode = self.control_mode, #p.VELOCITY_CONTROL,
+			controlMode = self.control_mode,
 			targetPositions = action,
 			forces = self.actuated_force_limits,
 			)
@@ -215,4 +219,67 @@ class Quadruped_Control(gym.Env):
 
 		self.sensor_state =  sensor_output(self.spot, acctuated_joint_ids = self.actuated_joints_ids, toe_joint_ids = self.toes_ids, toe_force_threshold = self.toe_force_sensor_threshold)
 
+		if self.record:
+			self.self.record_video()
+
+
 		return self.sensor_state, self.behaviour.compute_reward()
+
+
+	def record_video(self):
+		"""
+
+		The function appends an image, according to the self.camera_settings parameters, into self.video using pybullets getCameraImage function.
+		
+		Note1: 
+		To render the video in google colaboratory you can use the following lines of code:
+		
+		from numpngw import write_apng
+		from IPython.display import Image 
+		
+		write_apng('video.png', self.video, delay=20)
+		Image(filename='video.png')
+
+
+		Note2: For this fucntion to be fast check PyBullet.isNumpyEnabled() (must be True, if not check PyBullet.getCameraImage in the pybullet documentation)
+		"""
+
+		if self.camera_settings["cameraTargetPosition"] == "spot":
+			
+			position, __ = p.getBasePositionAndOrientation(self.spot) 
+		
+		else:
+			position =  self.camera_settings["cameraTargetPosition"]
+
+		
+		width  = self.camera_settings['width']
+		height = self.camera_settings['height']
+		
+		img_arr = p.getCameraImage(
+			width,
+			height,
+			viewMatrix=p.computeViewMatrixFromYawPitchRoll(
+				
+				cameraTargetPosition = position,
+				
+				distance = self.camera_settings['distance'],
+				yaw      = self.camera_settings['yaw'],
+				pitch    = self.camera_settings['pitch'],
+				roll     = self.camera_settings['roll'],
+				
+				upAxisIndex=self.camera_settings['upAxisIndex'], #(2 should be ok)
+			),
+			projectionMatrix=p.computeProjectionMatrixFOV(
+				
+				fov     = self.camera_settings['fov'],
+				aspect  = width/height,
+				nearVal = self.camera_settings['nearVal'],# 0.01 is ok
+				farVal  = self.camera_settings['farVal'], # 100 is ok
+			
+			),
+			shadow = self.camera_settings['shadow'], # [1,1,1] is ok
+			lightDirection=self.camera_settings['lightDirection'], # [1,1,1] is ok
+		)
+		width, height, rgba, depth, mask = img_arr
+
+		self.video.append(rgba)
