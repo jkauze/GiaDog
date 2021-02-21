@@ -200,46 +200,6 @@ class Quadruped_Control(gym.Env):
 
 		return self.sensor_state
 
-
-
-
-	def step(self, action):
-		"""
-		action: [float]
-		"""
-		if self.control_mode_label == "velocity":
-
-			p.setJointMotorControlArray(
-			bodyUniqueId = self.spot, 
-			jointIndices = self.actuated_joints_ids,
-			controlMode = self.control_mode,
-			targetVelocities = action,
-			forces = self.actuated_force_limits,
-			)
-
-		elif self.control_mode_label == "position":
-
-			p.setJointMotorControlArray(
-			bodyUniqueId = self.spot, 
-			jointIndices = self.actuated_joints_ids,
-			controlMode = self.control_mode,
-			targetPositions = action,
-			forces = self.actuated_force_limits,
-			)
-
-		p.stepSimulation()
-
-		self.sensor_state =  sensor_output(self.spot, acctuated_joint_ids = self.actuated_joints_ids, toe_joint_ids = self.toes_ids, toe_force_threshold = self.toe_force_sensor_threshold, output_type = "list")
-
-		if self.record:
-			self.record_video()
-
-		reward, done, _ = self.behaviour.compute_reward(self.spot) 
-
-
-		return self.sensor_state, reward, done, _
-
-
 	def record_video(self):
 		"""
 
@@ -297,3 +257,42 @@ class Quadruped_Control(gym.Env):
 		width, height, rgba, depth, mask = img_arr
 
 		self.video.append(rgba)
+
+
+	def step(self, action):
+		"""
+		action: [float]
+		"""
+		if self.control_mode_label == "velocity":
+
+			p.setJointMotorControlArray(
+			bodyUniqueId = self.spot, 
+			jointIndices = self.actuated_joints_ids,
+			controlMode = self.control_mode,
+			targetVelocities = action,
+			forces = self.actuated_force_limits,
+			)
+
+		elif self.control_mode_label == "position":
+
+			p.setJointMotorControlArray(
+			bodyUniqueId = self.spot, 
+			jointIndices = self.actuated_joints_ids,
+			controlMode = self.control_mode,
+			targetPositions = action,
+			forces = self.actuated_force_limits,
+			)
+
+		p.stepSimulation()
+
+		self.sensor_state =  sensor_output(self.spot, acctuated_joint_ids = self.actuated_joints_ids, toe_joint_ids = self.toes_ids, toe_force_threshold = self.toe_force_sensor_threshold, output_type = "list")
+
+		if self.record:
+			self.record_video()
+
+		reward, done, _ = self.behaviour.compute_reward(self.spot) 
+
+
+		return self.sensor_state, reward, done, _
+
+
