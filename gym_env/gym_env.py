@@ -1,9 +1,14 @@
 import gym
 import pybullet as p
 from bullet_dataclasses import Joint, JointState, sensors_state
+import numpy as np
+
+import pybullet_data
 
 
-p.connect(p.DIRECT)
+
+
+
 
 FPS = 50
 
@@ -63,7 +68,7 @@ class Behaviour():
 		"""
 		self.name = settings['name'] # str
 
-		self.goal_twist = np.array(settings['desired_twist']) # [ω_x, ω_y, ω_z, v_x, v_y, v_z] list
+		self.goal_twist = np.array(settings['goal_twist']) # [ω_x, ω_y, ω_z, v_x, v_y, v_z] list
 
 		self.min_z = settings['min_z'] # Minimal z value we ddont 
 
@@ -82,7 +87,7 @@ class Behaviour():
 
 		
 			
-		return err, z < self.min_z # reward and done condition (If the robot falls a certain trehsold)
+		return [err, z < self.min_z, 0] # reward and done condition (If the robot falls a certain trehsold)
 		
 
 
@@ -135,6 +140,11 @@ class Quadruped_Control(gym.Env):
 
 		self.record =  settings['record'] # booelan: if True, each step of the simulation an image would be redered and appended to self.video according to settings['camera_settings']. Thi is mainly for colab/jupyter use.
 
+		
+		self.action_space = np.zeros( (len(self.actuated_joints_ids),1))
+
+		self.observation_space =  np.zeros( (6 + len(self.actuated_joints_ids) + len(self.toes_ids),1))
+
 
 
 
@@ -186,7 +196,9 @@ class Quadruped_Control(gym.Env):
 
 
 
-		self.sensor_state =  sensor_output(self.spot, acctuated_joint_ids = self.actuated_joints_ids, toe_joint_ids = self.toes_ids, toe_force_threshold = self.toe_force_sensor_threshold)
+		self.sensor_state =  sensor_output(self.spot, acctuated_joint_ids = self.actuated_joints_ids, toe_joint_ids = self.toes_ids, toe_force_threshold = self.toe_force_sensor_threshold, output_type = "list")
+
+		return self.sensor_state
 
 
 
@@ -217,13 +229,15 @@ class Quadruped_Control(gym.Env):
 
 		p.stepSimulation()
 
-		self.sensor_state =  sensor_output(self.spot, acctuated_joint_ids = self.actuated_joints_ids, toe_joint_ids = self.toes_ids, toe_force_threshold = self.toe_force_sensor_threshold)
+		self.sensor_state =  sensor_output(self.spot, acctuated_joint_ids = self.actuated_joints_ids, toe_joint_ids = self.toes_ids, toe_force_threshold = self.toe_force_sensor_threshold, output_type = "list")
 
 		if self.record:
 			self.self.record_video()
 
+		reward, done, _ = self.behaviour.compute_reward(self.spot) 
 
-		return self.sensor_state, self.behaviour.compute_reward()
+
+		return self.sensor_state, reward, done, _
 
 
 	def record_video(self):
