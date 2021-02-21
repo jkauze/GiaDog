@@ -232,7 +232,7 @@ class Quadruped_Control(gym.Env):
 		self.sensor_state =  sensor_output(self.spot, acctuated_joint_ids = self.actuated_joints_ids, toe_joint_ids = self.toes_ids, toe_force_threshold = self.toe_force_sensor_threshold, output_type = "list")
 
 		if self.record:
-			self.self.record_video()
+			self.record_video()
 
 		reward, done, _ = self.behaviour.compute_reward(self.spot) 
 
