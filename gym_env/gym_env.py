@@ -251,7 +251,7 @@ class Quadruped_Control(gym.Env):
 				farVal  = self.camera_settings['farVal'], # 100 is ok
 			
 			),
-			shadow = self.camera_settings['shadow'], # [1,1,1] is ok
+			shadow = self.camera_settings['shadow'], # True or False
 			lightDirection=self.camera_settings['lightDirection'], # [1,1,1] is ok
 		)
 		width, height, rgba, depth, mask = img_arr
