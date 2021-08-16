@@ -5,6 +5,7 @@
 
 	[TODO: DESCRIPTION]
 */
+#pragma once
 #ifndef CONTROLLER
 #define CONTROLLER 1
 
@@ -38,7 +39,7 @@ class controller_t {
 
 			Foot Trajectory Generator variables 
 			
-			Hi_z         : Eigen::Vector3d -> i-th leg horizontal frame z component.
+			Hi_z       : Eigen::Vector3d -> i-th leg horizontal frame z component.
 			
 			sigma_i_0_ : double -> Lenght of the wrist joint.
 			
@@ -54,7 +55,9 @@ class controller_t {
 	public:
 		controller_t(void) {}
 		/*
-			[TO DO: DESCRIPTION]
+			Generates a vector in R^3 representing the desired foot position (end efector)
+			in the H_i frame corresponding to the robots i-th leg horizontal frame below 
+			its hip.
 			
 			Args:
 				t  : double  ->  Timestep.
@@ -64,7 +67,7 @@ class controller_t {
 				Eigen::Vector3d  ->  Vector expresed in the i-th leg horizontal frame Hi,
 					representing de target foot position.
 			References:
-				* 	Learning Quadrupedal Locomotion over Challenging Terrain (2020).
+				* 	Learning Quadrupedal Locomotion over Challenging Terrain (Oct,2020).
 					(p.8 Motion synthesis and p.15 S3 Foot trajectory generator).
 					https://arxiv.org/pdf/2010.11251.pdf
 		*/
@@ -94,7 +97,21 @@ class controller_t {
 		}
 
 		/*
-			[TODO: DOCUMENTATION]
+			For a robot foot, given a position r in its horizontal frame, the joint angles
+			are calcultated. (Hip, Shoulder, Wrist) [The angles are in radians]
+			
+			Args:
+				r  : Eigen::Vector3d  ->  Objective foot position in the H_i frame.
+				
+			Return:
+				Eigen::Vector3d  ->  Leg joint angles to reach the objective foot 
+									 position r. In the order: (Hip, Shoulder, Wrist).
+									 The joint angles are expresed in radians.
+				 
+			References:
+				* 	Adham Elarabawy (May, 2020).
+					12-DOF Quadrupedal Robot: Inverse Kinematics
+					https://www.adham-e.dev/pdf/IK_Model.pdf
 		*/
 		Eigen::Vector3d inverse_kinematics(
 								Eigen::Vector3d r
