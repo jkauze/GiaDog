@@ -27,14 +27,14 @@ int main(int argc, char **argv) {
 			atof(argv[3]), 
 			atoi(argv[4])
 		);
-		t.save((std::string) argv[4]);
+		t.save((std::string) argv[5]);
 	}
 	else if ((std::string) argv[1] == "--stairs")
 	{
 		if (argc != 5) syntax_error();
 		t.adaptative_stairs(
 			atoi(argv[2]), 
-			atoi(argv[3])
+			atof(argv[3])
 		);
 		t.save((std::string) argv[4]);
 	}
@@ -54,12 +54,12 @@ int main(int argc, char **argv) {
 void syntax_error(void) {
 	error(
 		"Invalid syntax. Use:\n\n"
-		"  \e[1mterrain_gen --hills\e[0m [\e[3;4mROUGHNESS\e[0m] [\e[3;4mFREQUENCY\e[0m] "
-					"[\e[3;4mHEIGHT\e[0m] [\e[3;4mSEED\e[0m] [\e[3;4mFILE_OUT\e[0m] \n"
-		"  \e[1mterrain_gen --maincra\e[0m [\e[3;4mWIDTH\e[0m] [\e[3;4mHEIGHT\e[0m] "
-					"[\e[3;4mSEED\e[0m] [\e[3;4mFILE_OUT\e[0m]\n"
-		"  \e[1mterrain_gen --stairs\e[0m [\e[3;4mWIDTH\e[0m] [\e[3;4mHEIGHT\e[0m] "
-					"[\e[3;4mFILE_OUT\e[0m]\n"
-		"  \e[1mterrain_gen --run\e[0m [\e[3;4mFILE_IN\e[0m]\n"
+		"  \e[1mterrain_gen --hills\e[0m \e[3;4mROUGHNESS\e[0m \e[3;4mFREQUENCY\e[0m "
+					"\e[3;4mHEIGHT\e[0m \e[3;4mSEED\e[0m \e[3;4mFILE_OUT\e[0m \n"
+		"  \e[1mterrain_gen --maincra\e[0m \e[3;4mWIDTH\e[0m \e[3;4mHEIGHT\e[0m "
+					"\e[3;4mSEED\e[0m \e[3;4mFILE_OUT\e[0m\n"
+		"  \e[1mterrain_gen --stairs\e[0m \e[3;4mWIDTH\e[0m \e[3;4mHEIGHT\e[0m "
+					"\e[3;4mFILE_OUT\e[0m\n"
+		"  \e[1mterrain_gen --run\e[0m \e[3;4mFILE_IN\e[0m\n"
 	);
 }

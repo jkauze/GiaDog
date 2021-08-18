@@ -50,8 +50,7 @@ class terrain_t {
 
 			Args:
 				h: float  ->  Maxima altura de las colinas.
-				smooth: float  ->  Suavidad del terreno usando Perlin Noise. Debe ser 
-					mayor a 0.
+				smooth: float  ->  Suavidad del terreno usando Perlin Noise. 
 				f: float  ->  Frecuencia de las colinas.
 				seed: uint32_t ->  Semilla para la aleatoriedad del Perlin Noise.
 		*/
@@ -148,6 +147,19 @@ class terrain_t {
 				h: float  ->  Alto de cada escalon.
 		*/
 		void adaptative_stairs(unsigned w, float h);
+
+		/*
+			Agrega una zona cuadrada inicial al terreno, cuya altura depende de la zona
+			alrededor.
+
+			Args:
+				row: unsigned  ->  Fila donde se encuentra la zona inicial. Valor por 
+					defecto: 0.
+				col: unsigned  ->  Columna donde se encuentra la zona inicial. Valor por
+					defecto: 22.
+				w: unsigned  ->  Ancho de la zona inicial. Valor por defecto: 250.
+		*/
+		void init_area(unsigned row=0, unsigned col=225, unsigned w=50);
 };
 
 terrain_t::terrain_t(void) {
@@ -248,6 +260,8 @@ void terrain_t::step(std::vector<std::string> args) {
 }
 
 void terrain_t::hill(unsigned row, unsigned col, float r, float h, float c) {
+	if (r == 0) return;
+
 	// Verificamos que la circunferencia no se salga de los limites del terreno.
 	unsigned begin_row = row - r < 0 ? 0 : row - r;
 	unsigned begin_col = col - r < 0 ? 0 : col - r;
@@ -259,10 +273,10 @@ void terrain_t::hill(unsigned row, unsigned col, float r, float h, float c) {
 	{
 		for (int j = begin_col; j < end_col; j++)
 		{
-			d = pow(i - row, 2) + pow(j - col, 2);
-			if (d <= pow(r, 2))
+			d = (i - row) * (i - row) + (j - col) * (j - col);
+			if (d <= r * r)
 			{
-				this->terrain_[i][j] += powf((1 - d / pow(r, 2)) * h, 1 / (c + 1));
+				this->terrain_[i][j] += powf((1 - (double) d / (r * r)) * h, 1 / (c + 1));
 			}
 		}
 	}
@@ -317,7 +331,7 @@ void terrain_t::stair(
 		case 'N':
 			for (int i = 0; i < n; i++) 
 			{
-				this->step(row - (i+1)*w, col + i*w, w, l, i*h);
+				this->step(row - (i+1)*w, col, w, l, i*h);
 			}
 			break;
 
@@ -327,9 +341,9 @@ void terrain_t::stair(
 }
 
 void terrain_t::stair(std::vector<std::string> args) {
-	if (args.size() != 5) 
+	if (args.size() != 7) 
 	{
-		error("STAIR instruction expected 7 arguments.");
+		error("STAIR instruction expected 6 arguments.");
 	}
 	this->stair(
 		std::stoul(args[0]), 
@@ -359,9 +373,9 @@ void terrain_t::save(std::string filename) {
 }
 
 void terrain_t::save(std::vector<std::string> args) {
-	if (args.size() != 5) 
+	if (args.size() != 1) 
 	{
-		error("STAIR instruction expected 1 argument.");
+		error("SAVE instruction expected 1 argument.");
 	}
 	this->save(args[0]);
 }
@@ -421,6 +435,9 @@ void terrain_t::adaptative_hills(float r, float f, float h, uint32_t seed) {
 	this->perlin(h, 1, f * MAX_FREQUENCY, seed);
 	// Agregamos la rugosidad.
 	this->perlin(r * MAX_ROUGHNESS, 50, 15, seed+1);
+
+	// Creamos una zona inicial.
+	this->init_area();
 }
 
 void terrain_t::adaptative_maincra(unsigned w, float h, uint32_t seed) {
@@ -448,6 +465,9 @@ void terrain_t::adaptative_maincra(unsigned w, float h, uint32_t seed) {
 		}
 		row += w;
 	}
+
+	// Creamos una zona inicial.
+	this->init_area();
 }
 
 void terrain_t::adaptative_stairs(unsigned w, float h) {
@@ -473,4 +493,62 @@ void terrain_t::adaptative_stairs(unsigned w, float h) {
 	unsigned n2 = 200 / w;
 	this->step(0, 300 + 200 % w, 500, n2 * w, (n0 + 1) * h + n1 * h - n2 * h);
 	this->stair(0, 500, 'W', 500, w, h, n2);
+}
+
+void terrain_t::init_area(unsigned row, unsigned col, unsigned w) {
+	// Calculamos la altura promedio de la zona contigua al area inicial.
+	float h = 0;
+	int count = 0;
+
+	// Verificamos que la zona inicial no se salga del terreno.
+	unsigned end_row = row + w > this->rows_ ? this->rows_ : row + w;
+	unsigned end_col = col + w > this->cols_ ? this->cols_ : col + w;
+
+	// Casillas contiguas al norte.
+	if (row > 0)
+	{
+		for (int i = col; i < end_col; i++)
+		{
+			h += this->terrain_[row-1][i];
+			count += 1;
+		}
+	}
+	// Casillas contiguas al sur.
+	if (row + w < this->rows_)
+	{
+		for (int i = col; i < end_col; i++)
+		{
+			h += this->terrain_[row+w][i];
+			count += 1;
+		}
+	}
+	// Casillas contiguas al oeste.
+	if (col > 0)
+	{
+		for (int i = row; i < end_row; i++)
+		{
+			h += this->terrain_[i][col-1];
+			count += 1;
+		}
+	}
+	// Casillas contiguas al este.
+	if (col + w < this->cols_)
+	{
+		for (int i = row; i < end_row; i++)
+		{
+			h += this->terrain_[i][col+w];
+			count += 1;
+		}
+	}
+	h /= count;
+
+	// Creamos la zona inicial.
+	for (int i = row; i < end_row; i++)
+	{
+		for (int j = col; j < end_col; j++)
+		{
+			this->terrain_[i][j] = h;
+		}
+	}
+
 }

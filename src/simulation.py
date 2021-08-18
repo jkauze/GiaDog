@@ -22,17 +22,30 @@ class simulation:
 		self, 
 		terrain_file: str, 
 		giadog_file: str,
-		mesh_scale: List[int]=[1/50,1/50,1]
+		mesh_scale: List[int]=[1/50, 1/50, 1],
+		init: Tuple[int, int]=(0, 0)
 	):
 		"""
 			Genera una simulacion de prueba para un terreno especificado.
 
 			Args:
 				terrain_file: str  ->  Direccion del archivo que contiene el terreno.
-				giadog_file str  ->  Direccion del archivo que contiene la especificacion
+				giadog_file: str  ->  Direccion del archivo que contiene la especificacion
 					del agente.
 				mesh_scale: List[int]  ->  Lista 3D que representa la scala del terreno.
+				init: Optional[Tuple[int, int]]  ->  Coordenada inicial. La altura es 
+					calculada de forma automatica. Valor por defecto: (0, 0).
 		"""
+		# Obtenemos el numero de filas y columnas
+		with open(terrain_file, 'r') as f:
+			lines = f.readlines()
+			rows = len(lines)
+			cols = len(lines[0].split())
+
+			pos_x = rows // 2 + int(init[0] / mesh_scale[0])
+			pos_y = cols // 2 + int(init[1] / mesh_scale[1])
+			h = float(lines[pos_x].split()[pos_y][:-1]) / (2 * mesh_scale[2])
+
 		# Conectamos pybullet
 		pb.connect(pb.GUI)
 		pb.setAdditionalSearchPath(pd.getDataPath())
@@ -49,7 +62,7 @@ class simulation:
 		pb.setGravity(0, 0, -9.807)
 
 		# Agregamos al agente GIAdog
-		pb.loadURDF(giadog_file, [0,0,1])
+		pb.loadURDF(giadog_file, [init[0], init[1], h])
 
 		while True: 
 			pb.stepSimulation()
@@ -57,4 +70,16 @@ class simulation:
 		
 
 if __name__ == '__main__':
-	simulation().test_terrain(argv[1], argv[2])
+	def syntax_error():
+		print(
+			"Invalid syntax. Use:\n\n" +\
+			"  \033[1mpython simulation.py --test\033[0m \033[3;4mTERRAIN\033[0m " +\
+				"\033[3;4mGIADOG\033[0m \033[3;4mROW\033[0m \033[3;4mCOL\033[0m\n",
+			file=stderr
+		)
+		exit(1)
+
+	if len(argv) < 6: syntax_error()
+
+	if argv[1] == "--test":
+		simulation().test_terrain(argv[2], argv[3], init=(float(argv[4]), float(argv[5])))
