@@ -13,7 +13,7 @@
 #include <iostream>
 
 // Math
-#include <Eigen/Dense> //Matrix manipulation (numpy like arrays)
+#include "Eigen/Dense" //Matrix manipulation (numpy like arrays)
 #include <cmath>
 
 
