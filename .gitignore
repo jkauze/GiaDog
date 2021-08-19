@@ -1,0 +1,6 @@
+# Visual Studio Code configurations.
+.vscode/
+vscode/
+
+# Binary files
+*.out
