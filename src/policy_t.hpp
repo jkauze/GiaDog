@@ -136,7 +136,7 @@ double teacher_policy_t::reward(
 	for (int i = 0; i < 4; i++)
 	{
 		// If i-th foot is in swign phase.
-		if (phi[i] >= M_PI)
+		if (phi[i] >= M_PI) //Note: This may cause trouble: rec-> change for pi value
 		{
 			i_swing++;
 
@@ -205,7 +205,7 @@ double teacher_policy_t::reward(
 	double r_s = - (r_fd_tm0 - 2.0 * r_fd_tm1 + r_fd_tm2).norm();
 
 	// Torque Reward
-	double r_tau = 0
+	double r_tau = 0;
 	for (double t : theta) r_tau -= abs(t);
 
 

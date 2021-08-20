@@ -11,7 +11,7 @@ from sys import argv, stderr
 import time
 
 # Simulacion
-import pybullet as pb
+import pybullet as p
 import pybullet_data as pd
 
 class simulation:
@@ -47,25 +47,25 @@ class simulation:
 			h = float(lines[pos_x].split()[pos_y][:-1]) / (2 * mesh_scale[2])
 
 		# Conectamos pybullet
-		pb.connect(pb.GUI)
-		pb.setAdditionalSearchPath(pd.getDataPath())
+		p.connect(p.GUI)
+		p.setAdditionalSearchPath(pd.getDataPath())
 		
 		# Configuracion del terreno
-		terrain_shape = pb.createCollisionShape(
-			shapeType=pb.GEOM_HEIGHTFIELD, 
+		terrain_shape = p.createCollisionShape(
+			shapeType=p.GEOM_HEIGHTFIELD, 
 			meshScale=mesh_scale,
 			fileName=terrain_file, 
 			heightfieldTextureScaling=128
 		)
-		terrain = pb.createMultiBody(0, terrain_shape)
-		pb.resetBasePositionAndOrientation(terrain,[0,0,0], [0,0,0,1])
-		pb.setGravity(0, 0, -9.807)
+		terrain = p.createMultiBody(0, terrain_shape)
+		p.resetBasePositionAndOrientation(terrain,[0,0,0], [0,0,0,1])
+		p.setGravity(0, 0, -9.807)
 
 		# Agregamos al agente GIAdog
-		pb.loadURDF(giadog_file, [init[0], init[1], h])
+		p.loadURDF(giadog_file, [init[0], init[1], h])
 
 		while True: 
-			pb.stepSimulation()
+			p.stepSimulation()
 			time.sleep(0.01)
 		
 
