@@ -52,16 +52,61 @@ class simulation:
 	def __init__(self,
 				terrain_file: str, 
 				giadog_file: str,
-				bullet_server,
+				bullet_server, #Basically the pybullet module
 				mesh_scale: List[float]=[1/50, 1/50, 1],
 				actuated_joints_ids: List[int] = [7,8,9, 11,12,13, 16,17,18, 20,21,22], 
 				
 				thighs_ids: List[int]  = [8,12,17,18],
 				shank_ids: List[int]  = [9,13, 18, 22],
 				toes_ids: List[int] =  [10, 14, 19, 23],
+
+				gravity_vector: np.ndarray = np.array([0, 0, -9.807])
 				): 
 		"""
-		[TODO:DESCRIPTION]
+		init function for the simulation class
+
+		Args:
+			terrain_file : str -> Path to the .txt file representing the terrain.
+			giadog_file  : str -> Path to the URDF file of the quadruped robot
+			bullet_server: <class 'module'>  -> Pybullet module.
+			mesh_scale   : List[float]       -> Scaling parameters for the terrain file.
+			
+			actuated_joints_ids: List[int]   -> List with the ids of the quadruped robot 
+												actuated joints. 
+			
+			The order should be as follows:
+			
+				'motor_front_left_hip' 
+				'motor_front_left_upper_leg'// "Front left thigh"						
+				'motor_front_left_lower_leg'// "Front left shank"
+
+				'motor_front_right_hip' 
+				'motor_front_right_upper_leg'// "Front right thigh"						
+				'motor_front_right_lower_leg'// "Front right shank"
+
+				'motor_back_left_hip' 
+				'motor_back_left_upper_leg'// "Back left thigh"						
+				'motor_back_left_lower_leg'// "Back left shank"
+
+				'motor_back_right_hip' 
+				'motor_back_right_upper_leg'// "Back right thigh"						
+				'motor_back_right_lower_leg'// "Back right shank"
+			
+
+			thighs_ids : List[int]  -> Thigs joints id list (The order is below)
+			shank_ids  : List[int]  -> Shank joints id list (The order is below)
+			toes_ids   : List[int]  -> Toes joints id list (The order is below)
+		
+			The order is the following:
+				front_left  (thigh/shak/toe)
+				front_right (thigh/shak/toe)
+				back_left   (thigh/shak/toe)
+				back_right  (thigh/shak/toe)
+
+			gravity_vector: np.ndarray -> Simulation gravity vector.
+
+		Return:
+			None
 		"""
 		
 		self.giadog_urdf_file = giadog_file
@@ -80,10 +125,56 @@ class simulation:
 		self.get_terrain_height = interp2d(x_space, y_space, 
 										self.terrain_array, kind='linear')
 		
+		# Robot joint ids
 		self.actuated_joints_ids = actuated_joints_ids
 		self.thighs_ids = thighs_ids
 		self.shank_ids = shank_ids
 		self.toes_ids = toes_ids
+
+		#--------------------------------------------------------------------------------#
+		
+		# State data // Sensor data
+		self.desired_direction = np.zeros([2])
+		self.desired_turning_direction = np.zeros([1])
+		self.gravity_vector = gravity_vector
+
+		self.base_linear_velocity = np.zeros([3])
+		self.base_angular_velocity = np.zeros([3])
+
+		self.joint_angles = np.zeros([12]) 
+		self.joint_velocities = np.zeros([12])
+
+		# FTG (These may be provided by the C++ controller module)
+		self.ftg_phases_sin_cos = np.zeros([4,2])
+		self.ftg_frequencies = np.zeros([4])
+		self.base_frequency = np.zeros([1])
+
+		# Historic data
+		self.joint_position_error_history = np.zeros([2, 12])
+		self.joint_velocity_history       = np.zeros([2, 12])
+		self.foot_target_history          = np.zeros([2, 4, 3])
+		
+		# Priviledge data
+		self.terrain_normal_at_each_toe = np.zeros([4, 3])
+		self.normal_force_at_each_toe   = np.zeros([4]) # (Foot contact forces?¿)
+		
+		self.toes_contact_states   = np.zeros([4])
+		self.thighs_contact_states = np.zeros([4])
+		self.shanks_contact_states = np.zeros([4])
+		
+		self.height_scan_at_each_toe = np.zeros([4, 9])
+
+		self.external_force_applied_to_the_base = np.zeros([3])
+
+		# Data only for reward purposes
+		self.joint_torques = np.zeros(12)
+
+		# Extra sensor (This may be used in the future)
+		self.toe_force_sensor = np.zeros(4) 
+
+		#--------------------------------------------------------------------------------#
+		  
+
 	
 	def initialize(self,
 					x_o:float = 0.0, 
@@ -113,9 +204,9 @@ class simulation:
 		self.terrain = p.createMultiBody(0, terrain_shape)
 
 		self.p.resetBasePositionAndOrientation(self.terrain,[0,0,0], [0,0,0,1])
-		self.p.setGravity(0, 0, -9.807)
+		self.p.setGravity(*self.gravity_vector)
 
-		self.gravity_vector = np.array([0, 0, -9.807])
+		
 
 
 		# 
@@ -140,13 +231,22 @@ class simulation:
 
 		It updates: [TODO]
 
-		Reference:
 
 		Args:
 			self: simulation  ->  Simulation class
 		Return:
 			None
 		"""
+		#---------------------------Historic Data Update---------------------------------#
+		# TODO
+		self.joint_position_error_history[1] = self.joint_velocity_history[0]
+		#self.joint_position_error_history[0] = self.joint_position_error 
+
+		self.joint_velocity_history[1] = self.joint_velocity_history[0]
+		self.joint_velocity_history[0] = self.joint_velocities 
+		
+		self.foot_target_history[1]  = self.foot_target_history[0]
+		#self.foot_target_history[0]  = self.foot_target
 
 		#-----------------------------Base Velocity--------------------------------------#
 
@@ -156,7 +256,7 @@ class simulation:
 
 		#-----------------------------Contact info---------------------------------------#
 		
-		# Toes//Foot//Patitas
+		# Toes//Feet//Patitas
 		self.terrain_normal_at_each_toe = np.zeros([4, 3])
 		self.normal_force_at_each_toe = np.zeros([4])
 		self.toes_contact_states = np.zeros([4])
@@ -190,7 +290,7 @@ class simulation:
 			
 			self.thighs_contact_states[i] = float(thigh_contact_info != ())
 			
-		# Shanks//canillas
+		# Shanks//Canillas
 		self.shanks_contact_states = np.zeros([4])
 		for i, shank_id in enumerate(self.shanks_ids):
 
@@ -217,9 +317,9 @@ class simulation:
 		
 			# Height scan around each foot 
 			roll, pitch, yaw = self.p.getEulerFromQuaternion(toe_orientation)
-			x,y =  toe_position[0], toe_position[1] 
+			x,y,z =  toe_position 
 			P = get_foot_height_scan_coordinates(x,y,yaw) 
-			self.height_scan_at_each_toe[i] = [self.get_terrain_height(x, y) 
+			self.height_scan_at_each_toe[i] = [self.get_terrain_height(x, y) - z
 											   for (x,y) in P]
 		#--------------------------------------------------------------------------------#
 
@@ -246,6 +346,7 @@ class simulation:
 		self.joint_angles = np.zeros(12) # 12 = Number of DOF // Controlled joints
 		self.joint_velocities = np.zeros(12)
 		self.joint_torques = np.zeros(12) # For reward calculations   
+		
 		for i, j_state in enumerate(self.p.getJointStates(
 												bodyUniqueId = self.quadruped,
 												jointIndex = self.actuated_joints_ids)):
@@ -259,12 +360,44 @@ class simulation:
 			self.joint_torques[i] = j_state.appliedJointMotorTorque
 		
 		#--------------------------------------------------------------------------------#
+
+	def actuate_joints(self, 
+					joint_target_positions:List[float]):
 		
+		"""
+		Moves the robot joints to a given target position.
 
+		Args:
+			joint_target_positions: List[float] -> Quadruped joints desired angles 
+												   The order is the same as for the robot
+												   actuated_joints_ids. (12 element list)
+			The order should be as follows:
+			
+				'motor_front_left_hip' 
+				'motor_front_left_upper_leg'// "Front left thigh"						
+				'motor_front_left_lower_leg'// "Front left shank"
 
+				'motor_front_right_hip' 
+				'motor_front_right_upper_leg'// "Front right thigh"						
+				'motor_front_right_lower_leg'// "Front right shank"
 
+				'motor_back_left_hip' 
+				'motor_back_left_upper_leg'// "Back left thigh"						
+				'motor_back_left_lower_leg'// "Back left shank"
 
+				'motor_back_right_hip' 
+				'motor_back_right_upper_leg'// "Back right thigh"						
+				'motor_back_right_lower_leg'// "Back right shank"
+
+		Note: It may be useful to add the Kp and Kd inputs
+		"""
 		
+		self.p.setJointMotorControlArray(
+			bodyUniqueId = self.quadruped,
+			jointIndices = self.actuated_joints_ids,
+			controlMode  = self.p.POSITION_CONTROL,
+			targetPositions = joint_target_positions,
+		)	
 
 
 	def test_terrain(
@@ -321,19 +454,12 @@ class simulation:
 			p.stepSimulation()
 			time.sleep(0.01)
 	
+	
 	def test_sensors(self):
 		"""
 			ESP:
 			
 			Genera una simulacion para probar de los "sensores" del robot.
-
-			Args:
-				terrain_file: str  ->  Direccion del archivo que contiene el terreno.
-				giadog_file: str  ->  Direccion del archivo que contiene la especificacion
-					del agente.
-				mesh_scale: List[int]  ->  Lista 3D que representa la scala del terreno.
-				init: Optional[Tuple[int, int]]  ->  Coordenada inicial. La altura es 
-					calculada de forma automatica. Valor por defecto: (0, 0).
 
 			ENG:
 		"""
