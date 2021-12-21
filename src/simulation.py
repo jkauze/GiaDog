@@ -47,27 +47,63 @@ def get_foot_height_scan_coordinates(x,y, alpha):
 	
 	return P
 
-class simulation:
+def contact_info_average(contact_points_info:List[ContactInfo]): 
+	"""
+		Given a robot toe position and orientation, returns the positions of the toe 
+		height sensor corrdinates.
+
+		Args:
+			contact_points_info: List[ContactInfo]  -> List containing the contact info of
+													   each point that has contact with 
+													   the leg foot.
+		
+		Return:
+			float -> magnitude of the normmal force on the foot.
+			float -> Friction coeficient between the foot and the terrain.
+			np.array ->  direction of the normal force accting on the foot.
+	"""
+	
+	contact_force = np.array([0,0,0]) 
+	friction_force = np.array([0,0,0]) 
+
+	for contact_info in contact_points_info:
+		
+		contact_force = contact_force + \
+			contact_info.normalForce * np.array(contact_info.contactNormalOnB) 
+
+		friction_force = friction_force + \
+			contact_info.lateralFriction1 * np.array(contact_info.lateralFrictionDir1) + \
+				contact_info.lateralFriction2 * np.array(contact_info.lateralFrictionDir2)
+
+	contact_force_mag = np.sqrt(contact_force.dot(contact_force))
+
+	fricction_coefficient = np.sqrt(friction_force.dot(friction_force))/contact_force_mag
+
+	return contact_force_mag, fricction_coefficient, contact_force/contact_force_mag
+
+
+class Simulation:
 	""" Simulation. """
 	def __init__(self,
-				terrain_file: str, 
-				giadog_file: str,
+				terrain_file:str, 
+				giadog_urdf_file:str,
 				bullet_server, #Basically the pybullet module
 				mesh_scale: List[float]=[1/50, 1/50, 1],
 				actuated_joints_ids: List[int] = [7,8,9, 11,12,13, 16,17,18, 20,21,22], 
 				
 				thighs_ids: List[int]  = [8,12,17,18],
-				shank_ids: List[int]  = [9,13, 18, 22],
+				shanks_ids: List[int]  = [9,13, 18, 22],
 				toes_ids: List[int] =  [10, 14, 19, 23],
 
 				gravity_vector: np.ndarray = np.array([0, 0, -9.807])
 				): 
 		"""
-		init function for the simulation class
+		init function for the Simulation class
 
 		Args:
-			terrain_file : str -> Path to the .txt file representing the terrain.
-			giadog_file  : str -> Path to the URDF file of the quadruped robot
+			terrain_file      : str -> Path to the .txt file representing the terrain.
+			giadog_urdf_file  : str -> Path to the URDF file of the quadruped robot
+			
 			bullet_server: <class 'module'>  -> Pybullet module.
 			mesh_scale   : List[float]       -> Scaling parameters for the terrain file.
 			
@@ -94,7 +130,7 @@ class simulation:
 			
 
 			thighs_ids : List[int]  -> Thigs joints id list (The order is below)
-			shank_ids  : List[int]  -> Shank joints id list (The order is below)
+			shanks_ids  : List[int]  -> Shank joints id list (The order is below)
 			toes_ids   : List[int]  -> Toes joints id list (The order is below)
 		
 			The order is the following:
@@ -109,13 +145,16 @@ class simulation:
 			None
 		"""
 		
-		self.giadog_urdf_file = giadog_file
+		self.giadog_urdf_file = giadog_urdf_file
 		self.p = bullet_server
 		self.mesh_scale = mesh_scale
 		self.terrain_file = terrain_file
 		
 		# This array is used to calculate the robot toes heightfields 
-		self.terrain_array    = np.loadtxt(open(self.terrain_file))
+		# Note : The last column is ignored because numpy adds a column of nans while 
+		# reading the file
+		self.terrain_array    = np.genfromtxt(self.terrain_file,  delimiter=",")[:, :-1]
+
 		x_size, y_size = self.terrain_array.shape 
 		x_space = np.linspace(0, x_size*mesh_scale[0], num = x_size)
 		y_space = np.linspace(0, y_size*mesh_scale[1], num = y_size)
@@ -128,7 +167,7 @@ class simulation:
 		# Robot joint ids
 		self.actuated_joints_ids = actuated_joints_ids
 		self.thighs_ids = thighs_ids
-		self.shank_ids = shank_ids
+		self.shanks_ids = shanks_ids
 		self.toes_ids = toes_ids
 
 		#--------------------------------------------------------------------------------#
@@ -210,7 +249,7 @@ class simulation:
 
 
 		# 
-		self.quadruped = self.p.loadURDF(self.giadog_file, 
+		self.quadruped = self.p.loadURDF(self.giadog_urdf_file, 
 									  [x_o, y_o, self.get_terrain_height(x_o, y_o) + 0.3])
 
 		#Torque sensors are enable on the quadruped toes
@@ -233,7 +272,7 @@ class simulation:
 
 
 		Args:
-			self: simulation  ->  Simulation class
+			self: Simulation  ->  Simulation class
 		Return:
 			None
 		"""
@@ -258,25 +297,32 @@ class simulation:
 		
 		# Toes//Feet//Patitas
 		self.terrain_normal_at_each_toe = np.zeros([4, 3])
-		self.normal_force_at_each_toe = np.zeros([4])
+		self.contact_force_at_each_toe = np.zeros([4])
 		self.toes_contact_states = np.zeros([4])
+		self.foot_ground_friction_coefficients = np.zeros([4])
 		for i, toe_id in enumerate(self.toes_ids):
 
 			# Privileged information
 			toe_contact_info = self.p.getContactPoints(
-												   bodyA  = self.quadruped, 
+												   bodyA = self.quadruped, 
 												   bodyB = self.terrain, 
 												   linkIndexA = toe_id)
 			if toe_contact_info == (): #No contact case
 				
 				self.terrain_normal_at_each_toe[i] = (0,0,0)
-				self.normal_force_at_each_toe[i] = 0 
+				self.contact_force_at_each_toe[i] = 0 
+				self.foot_ground_friction_coefficients[i] = 0 
 				self.toes_contact_states[i] = 0
 			
 			else:
-				toe_contact_info = ContactInfo(*toe_contact_info)
-				self.terrain_normal_at_each_toe[i] = toe_contact_info.contactNormalOnB 
-				self.normal_force_at_each_toe[i] = toe_contact_info.normalForce
+				
+				contact_force, fricction_coefficient, normal = contact_info_average(
+					[ContactInfo(*elem) for elem in  (toe_contact_info)])
+				
+				
+				self.terrain_normal_at_each_toe[i] = normal
+				self.contact_force_at_each_toe[i] = contact_force
+				self.foot_ground_friction_coefficients[i] = fricction_coefficient
 				self.toes_contact_states[i] = 1
 		
 		# Thighs//Muslos
@@ -329,7 +375,7 @@ class simulation:
 		self.toe_force_sensor = np.zeros(4) # 4 = Number of toes
 		for i, toe_joint_state in enumerate(self.p.getJointStates( 
 											bodyUniqueId = self.quadruped,
-											jointIndex = self.toes_ids)):
+											jointIndices = self.toes_ids)):
 			
 			toe_joint_state = JointState(*toe_joint_state) 
 			# "Analog" toe force sensor
@@ -349,7 +395,7 @@ class simulation:
 		
 		for i, j_state in enumerate(self.p.getJointStates(
 												bodyUniqueId = self.quadruped,
-												jointIndex = self.actuated_joints_ids)):
+												jointIndices = self.actuated_joints_ids)):
 
 			j_state = JointState(*j_state)
 
@@ -467,12 +513,14 @@ class simulation:
 		
 		while True: 
 			self.p.stepSimulation()
+			self.update_sensor_output()
 			time.sleep(1/240)
 
 
 		
 
 if __name__ == '__main__':
+	"""
 	def syntax_error():
 		print(
 			"Invalid syntax. Use:\n\n" +\
@@ -485,4 +533,14 @@ if __name__ == '__main__':
 	if len(argv) < 6: syntax_error()
 
 	if argv[1] == "--test":
-		simulation().test_terrain(argv[2], argv[3], init=(float(argv[4]), float(argv[5])))
+		Simulation().test_terrain(argv[2], argv[3], init=(float(argv[4]), float(argv[5])))
+	
+	"""
+	spot_urdf_file = "mini_ros/urdf/spot.urdf"
+	terrain_file = "test_terrain.txt" 
+
+	sim = Simulation(terrain_file, spot_urdf_file,p)
+	sim.initialize()	
+
+	sim.test_sensors()
+			
