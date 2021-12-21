@@ -11,137 +11,47 @@ La generacion de terrenos en una simulacion permite al agente GIAdog aprender a 
 antes de pasar al robot real. Los terrenos son almacenados como archivos `.txt` que 
 contienen una matriz tal que cada posicion indica la altura del terreno en dicho pixel.
 
-### **Compilacion**
+### **Hills**
 
-Desde el directorio raiz del repositorio ejecute
+Easy: 0 0.2 0.2
 
-```bash
-make terrain_gen
-```
+![Hills easy](docs/terrain_examples/hills_easy.png) 
 
-Esto generara un archivo `terrain_gen` en el directorio `bin/`. 
+Medium: 0.02 1.6 1.6
 
-### **Ejecucion**
+![Hills medium](docs/terrain_examples/hills_medium.png) 
 
-La sintaxis del archivo binario `terrain_gen` es
+Hard: 0.04 3 3
 
-```bash
-terrain_gen ACTION ARGUMENT ...
-```
+![Hills hard](docs/terrain_examples/hills_hard.png) 
 
-Donde `ACTION` puede ser
+### **Steps** 
 
- * `--hills` genera un terreno de colinas irregulares creados usando el Ruido de 
- Perlin. Sus argumentos son:
+Easy: 25, 0.05
 
-	* `ROUGHNESS` es un numero flotante que indica la aspereza del terreno. Su valor 
-	se encuentra en el rango [0, 1], siendo 0 liso y 1 muy aspero.
-	* `FREQUENCY` es un numero flotante que indica la frecuencia en la aparicion de 
-	colinas. Su valor se encuentra en el rango [0, 1], siendo 0 que no hay colinas y 
-	1 que hay muchas colinas juntas.
-	* `HEIGHT` es un numero flotante no negativo que indica la altura maxima de las 
-	colinas
-	* `SEED` es un numero entero no negativo que indica la semilla para la 
-	aleatoriedad al aplicar el Ruido de Perlin.
-	* `FILE_OUT` es el archivo de texto donde se almacenara el terreno resultante.
+![Steps easy](docs/terrain_examples/steps_easy.png)
 
- * `--maincra` genera un terreno de cubos distribuidos siguiendo el Ruido de Perlin. 
- Sus argumentos son:
+Medium 17, 0.23
 
-	* `WIDTH` es un numero entero positivo que indica el ancho de los cubos.
-	* `HEIGHT` es un numero flotante no negativo que indica la altura maxima de los
-	cubos.
-	* `SEED` es un numero entero no negativo que indica la semilla para la 
-	aleatoriedad al aplicar el Ruido de Perlin.
-	* `FILE_OUT` es el archivo de texto donde se almacenara el terreno resultante.
+![Steps medium](docs/terrain_examples/steps_medium.png)
 
- * `--stairs` genera un terreno de escaleras. Sus argumentos son:
+Hard: 10, 0.4
 
-	* `WIDTH` es un numero entero positivo que indica el ancho de los escalones.
-	* `HEIGHT` es un numero flotante positivo que indica la altura de los escalones.
-	* `FILE_OUT` es el archivo de texto donde se almacenara el terreno resultante.
+![Steps hard](docs/terrain_examples/steps_hard.png)
 
- * `--run` ejecuta el interpretador para crear un terreno personalizado. Las 
- instrucciones que lee el interpretador se explicaran mas adelante. Sus argumentos
- son:
+### **Stairs**
 
-	* `FILE_IN` es el archivo que contiene las instrucciones que leera el 
-	interpretador
+Easy: 50, 0.02
 
-### **Interpretador**
+![Stairs easy](docs/terrain_examples/stairs_easy.png) 
 
-Permite crear terrenos personalizados. Las instrucciones que reconoce son:
+Medium: 30, 0.11
 
- * `TERRAIN ROWS COLS` inicializa el terreno con `ROWS` filas y `COLS` columnas,
- ambos numeros enteros positivos.
+![Stairs medium](docs/terrain_examples/stairs_medium.png)
 
- * `PERLIN HEIGHT SMOOTH FREQUENCY SEED` aplica sobre el terreno el Ruido de Perlin
- tal que `HEIGHT`, `SMOOTH` y `FREQUENCY` son flotantes no negativos y `SEED` es un
- entero no negativo.
+Hard: 15, 0.2
 
- * `STEP ROW COL WIDTH LENGTH HEIGHT` agrega al terreno un bloque en la posicion 
- (`ROW`, `COL`) siendo ambos enteros no negativos, al igual que `WIDTH` y `LENGTH`;
- y `HEIGHT` un flotante no negativo. 
-
- * `HILL ROW COL RADIUM HEIGHT CURVATURE` agrega al terreno una colina
- redonda cuyo centro se encuentra en la posicion (`ROW`, `COL`) siendo ambos enteros 
- no negativos, y `RADIUM`, `HEIGHT` y `CURVATURE` flotantes no negativos.
-
- * `STAIR ROW COL ORIENTATION WIDTH LENGTH HEIGH N` crea una escalera desde la 
- posicion (`ROW`, `COL`) con orientacion `ORIENTATION` el cual puede ser `N`, `S`, 
- `E` o `W` para indicar norte, sur, este u oeste respectivamente. `WIDTH` y `LENGHT`
- son enteros positivos que indican el ancho (numero de filas que ocupa) y largo 
- (numero de columnas que ocupa). `HEIGHT` es un flotante positivo que indica la 
- altura de cada escalon y `N` es un entero no negativo que indica el numero de 
- escalones.
-
- * `SAVE FILENAME` guarda el terreno actual en el archivo `FILENAME`.
-
-Algunos ejemplos de terrenos personalizados es almacenan en el directorio 
-`terrains/`.
-
-### **Pruebas**
-
-Para visualizar los terrenos generados se puede ejecutar
-
-```bash
-python src/simulation.py --test TERRAIN GIADOG ROW COL
-```
-
-Donde
-
- * `TERRAIN` es el archivo que almacena el terreno.
-
- * `GIADOG` es el archivo que contiene la configuracion del agente.
-
- * (`ROW`, `COL`) son las coordenadas donde aparecera el agente.
-
-### **Ejemplos**
-
-```bash
-bin/terrain_gen --hills 0.7 0.8 2.3 42 a.txt
-```
-
-![Hills example](docs/terrain_examples/hills_example.png) 
-
-
-```bash
-bin/terrain_gen --maincra 15 1.2 1999 a.txt
-```
-
-![Maincra example](docs/terrain_examples/maincra_example.png)
-
-```bash
-bin/terrain_gen --stairs 11 0.07 a.txt
-```
-
-![Stairs example](docs/terrain_examples/stairs_example.png)
-
-```bash
-bin/terrain_gen --run terrains/tower.tg
-```
-
-![Tower](docs/terrain_examples/tower.png)
+![Stairs hard](docs/terrain_examples/stairs_hard.png)
 
 ## **AUTORES**
 
