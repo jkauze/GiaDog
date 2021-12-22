@@ -49,6 +49,8 @@ def get_foot_height_scan_coordinates(x,y, alpha):
 
 def contact_info_average(contact_points_info:List[ContactInfo]): 
 	"""
+		ENG:
+
 		Given a robot toe position and orientation, returns the positions of the toe 
 		height sensor corrdinates.
 
@@ -98,6 +100,8 @@ class Simulation:
 				gravity_vector: np.ndarray = np.array([0, 0, -9.807])
 				): 
 		"""
+		ENG:
+
 		init function for the Simulation class
 
 		Args:
@@ -155,14 +159,6 @@ class Simulation:
 		# reading the file
 		self.terrain_array    = np.genfromtxt(self.terrain_file,  delimiter=",")[:, :-1]
 
-		x_size, y_size = self.terrain_array.shape 
-		x_space = np.linspace(0, x_size*mesh_scale[0], num = x_size)
-		y_space = np.linspace(0, y_size*mesh_scale[1], num = y_size)
-
-
-		# Function that given an x, y coordinate returns the height of that point
-		self.get_terrain_height = interp2d(x_space, y_space, 
-										self.terrain_array, kind='linear')
 		
 		# Robot joint ids
 		self.actuated_joints_ids = actuated_joints_ids
@@ -203,6 +199,9 @@ class Simulation:
 		
 		self.height_scan_at_each_toe = np.zeros([4, 9])
 
+		#for debug:
+		self.height_scan_lines = np.zeros([4,9,2, 3])
+
 		self.external_force_applied_to_the_base = np.zeros([3])
 
 		# Data only for reward purposes
@@ -220,6 +219,7 @@ class Simulation:
 					y_o:float = 0.0,
 					):
 		"""
+		ENG:
 		
 		Initializes a pybullet simulation, setting up the terrain, gravity and the 
 		quadruped in the pybullet enviroment. (And enabiling the torque sensors in the 
@@ -245,32 +245,134 @@ class Simulation:
 		self.p.resetBasePositionAndOrientation(self.terrain,[0,0,0], [0,0,0,1])
 		self.p.setGravity(*self.gravity_vector)
 
-		
 
 
 		# 
 		self.quadruped = self.p.loadURDF(self.giadog_urdf_file, 
-									  [x_o, y_o, self.get_terrain_height(x_o, y_o) + 0.3])
+						[x_o, y_o, self.get_terrain_height(x_o, y_o, 0) + 0.3],
+	    				flags = self.p.URDF_USE_SELF_COLLISION|\
+							self.p.URDF_USE_SELF_COLLISION_INCLUDE_PARENT )
 
 		#Torque sensors are enable on the quadruped toes
 
 		for toe_id in self.toes_ids:
 			self.p.enableJointForceTorqueSensor(
 				bodyUniqueId = self.quadruped,
-				jointIndex = toe_id,
+				jointIndex   = toe_id,
 				enableSensor = True,
 			)
+			
+		
+	def get_terrain_height(self,
+						   x:float,
+						   y:float,
+						   z_o:float,
+						   z_min:float = -50,
+						   z_max:float = 50):
+		"""
+		ENG:
+
+		Returns the height of the terrain at x,y coordinates (in cartesian world 
+		coordiantes). It needs a position z_o from where to shot a ray that will intersect
+		the terrain. The ray is casted from z_min and z_max to and from the z_o, to 
+		augment the probabilities of intersection with the terrain, this is to avoid 
+		having a ray casted to the robot body.
+
+		This function assumes the terrain has no bridge 'like' structures.
+
+		Args:
+			self: Simulation  ->  Simulation class
+			
+			x: float -> x position in cartesian global coordinates
+			y: float -> y position in cartesian global coordinates
+			
+			z_o: float -> z position in cartesian global coordinates for 
+						  the ray to be casted
+			
+			z_min: float -> Minimum height where the ray is gonna be casted. 
+							Should be below the min terrain height.
+			z_max: float -> Top height where the ray is gonna be casted.
+							Should be above the min terrain height.
+		
+		Return:
+			float -> The terrain height at that x, y point.
+					 If the rays does not intecept the terrain it returns np.NaN
+		"""
+
+		ray_info = self.p.rayTest((x, y, z_min),(x, y, z_o))[0]
+
+
+		if ray_info[0] == self.terrain:
+			
+			return ray_info[3][-1]
+
+		ray_info = self.p.rayTest((x, y, z_max),(x, y, z_o))[0]
+
+		if ray_info[0] == self.terrain:
+			
+			return ray_info[3][-1]
+		
+		ray_info = self.p.rayTest((x, y, z_o),(x, y, z_min))[0]
+
+		if ray_info[0] == self.terrain:
+			
+			return ray_info[3][-1]
+
+		ray_info = self.p.rayTest((x, y, z_o),(x, y, z_max))[0]
+
+		if ray_info[0] == self.terrain:
+			
+			return ray_info[3][-1]
 	
+		return np.NaN
+
+			
+
+
 
 
 	def update_sensor_output(self):
 		"""
+
+		ENG:
 		
 		Updates the sensor states for the current simulation steps.
 
-		It updates: [TODO]
+		It updates the following robot parameters
 
+		Historic Data:
 
+			joint_position_error_history
+		
+		Base Velocity:
+			
+			base_linear_velocity
+			base_angular_velocity
+		
+		Contact info:
+
+			terrain_normal_at_each_toe
+			contact_force_at_each_toe
+			foot_ground_friction_coefficients
+			
+			toes_contact_states
+			thighs_contact_states
+			shanks_contact_states
+
+		Height Scan:
+
+			height_scan_at_each_toe
+		
+		Toe Force Sensors:
+
+			toe_force_sensor
+
+		Actuated joints sensors:
+
+			joint_angles
+			joint_velocities
+			joint_torques
+		
 		Args:
 			self: Simulation  ->  Simulation class
 		Return:
@@ -352,6 +454,7 @@ class Simulation:
 		
 		#-----------------------------Height Scan----------------------------------------# 
 		self.height_scan_at_each_toe = np.zeros([4, 9]) # 9 scan points around each toe
+		
 		for i, toe_link_state in enumerate(
 									self.p.getLinkStates(self.quadruped, self.toes_ids)
 									):
@@ -365,8 +468,18 @@ class Simulation:
 			roll, pitch, yaw = self.p.getEulerFromQuaternion(toe_orientation)
 			x,y,z =  toe_position 
 			P = get_foot_height_scan_coordinates(x,y,yaw) 
-			self.height_scan_at_each_toe[i] = [self.get_terrain_height(x, y) - z
-											   for (x,y) in P]
+			
+			z_terrain = [self.get_terrain_height(x_p,y_p,z) for (x_p,y_p) in P]
+			
+			self.height_scan_lines[i] = np.array([[[x,y,z],[x_p, y_p, 
+			z_t]] for (x_p,y_p),z_t in zip(P, z_terrain)])
+		
+			
+			self.height_scan_at_each_toe[i] = [z_t - z
+											   for z_t in 
+											   z_terrain ]
+			
+			
 		#--------------------------------------------------------------------------------#
 
 
@@ -411,6 +524,8 @@ class Simulation:
 					joint_target_positions:List[float]):
 		
 		"""
+		ENG:
+
 		Moves the robot joints to a given target position.
 
 		Args:
@@ -435,7 +550,7 @@ class Simulation:
 				'motor_back_right_upper_leg'// "Back right thigh"						
 				'motor_back_right_lower_leg'// "Back right shank"
 
-		Note: It may be useful to add the Kp and Kd inputs
+		Note: It may be useful to add the Kp and Kd as inputs
 		"""
 		
 		self.p.setJointMotorControlArray(
@@ -444,6 +559,17 @@ class Simulation:
 			controlMode  = self.p.POSITION_CONTROL,
 			targetPositions = joint_target_positions,
 		)	
+
+	def draw_height_field_lines(self):
+		
+		for i, points in enumerate(self.height_scan_lines): # 
+			
+			for point in points:
+				
+				
+				
+				self.p.addUserDebugLine(point[0], point[1], (0, 1, 0), lifeTime = 3)
+				
 
 
 	def test_terrain(
@@ -510,11 +636,14 @@ class Simulation:
 			ENG:
 		"""
 
-		
+		t = 0
 		while True: 
 			self.p.stepSimulation()
 			self.update_sensor_output()
 			time.sleep(1/240)
+			t = t+1
+			if t%120 == 0:
+				self.draw_height_field_lines()
 
 
 		
@@ -537,7 +666,7 @@ if __name__ == '__main__':
 	
 	"""
 	spot_urdf_file = "mini_ros/urdf/spot.urdf"
-	terrain_file = "test_terrain.txt" 
+	terrain_file = "../test_terrains/maincra.txt" 
 
 	sim = Simulation(terrain_file, spot_urdf_file,p)
 	sim.initialize()	
