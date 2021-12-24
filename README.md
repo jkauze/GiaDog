@@ -5,7 +5,27 @@
  * `g++ >=8.3.0`
  * `python >=3.7.0`
 
-## **GENERACION DE TERRENOS**
+## **Ejecutar Docker**
+
+```bash
+xhost +
+sudo docker run \
+    --device /dev/dri/ \
+    --device /dev/snd \
+    --env="QT_X11_NO_MITSHM=1" \
+    --ipc=host \
+    --net=host \
+    --rm \
+    -e _JAVA_AWT_WM_NONREPARENTING=1 \
+    -e DISPLAY=$DISPLAY \
+    -e J2D_D3D=false \
+    -it \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -v $PWD:/usr/src/open-blacky \
+    open-blacky
+```
+
+## **Generacion de terrenos**
 
 La generacion de terrenos en una simulacion permite al agente GIAdog aprender a moverse
 antes de pasar al robot real. Los terrenos son almacenados como archivos `.txt` que 
