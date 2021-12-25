@@ -124,7 +124,6 @@ roscore > /dev/null &
 rosrun spot_mini_ros simulate.py <ARGS>
 ```
 
-
 ### Terrain generation
 
 The generation of terrain in a simulation allows the agent to learn to move in various
