@@ -2,17 +2,16 @@
     Authors: Amin Arriaga, Eduardo Lopez
     Project: Graduation Thesis: GIAdog
 
-    [TODO: DESCRIPTION]
+    File containing the code in charge of the automatic generation of simulated terrain.
 """
-
 import numpy as np
+import matplotlib.pyplot as plt
 from typing import *
 from random import uniform
-import matplotlib.pyplot as plt
 from perlin_noise import PerlinNoise
 
 class terrain_gen:
-    """ Clase que permite la generación de terrenos para el entorno de simulación. """
+    """ Class that allows the generation of terrains for the simulation environment. """
     STEPS_FREQUENCY   = 10
     STEPS_NOISE       = 0.05
     ZONE_STAIRS_WIDTH = 25
@@ -20,48 +19,49 @@ class terrain_gen:
     @staticmethod
     def terrain(rows: int, cols: int) -> np.ndarray:
         """
-            Genera un nuevo terreno.
+            Generate a new flat terrain.
 
-            Parametros:
+            Parameters:
             -----------
             rows: int
-                Número de filas.
+                Number of rows.
             cols: int
-                Número de columnas.
+                Number of columns.
 
             Return:
             -------
-            numpy.ndarray, shape (M, N)
-                Terreno con puros ceros de dimensiones rows x cols.
+            numpy.ndarray, shape (rows, cols)
+                Flat terrain of dimensions rows x cols.
         """
         return np.zeros((rows, cols))
 
     @staticmethod
-    def perlin(terrain: np.ndarray, height: float, octaves: float, seed: int):
+    def perlin(terrain: np.ndarray, amplitude: float, octaves: float, seed: int):
         """
-            Aplica el ruido de Perlin sobre un terreno.
+            Apply the Perlin noise on a terrain.
 
-            Parametros:
+            Parameters:
             -----------
             terrain: numpy.ndarray, shape (M, N)
-                Terreno a modificar.
-            height: float
-                Maxima altura del ruido
+                Terrain to modify.
+            amplitude: float
+                Maximum noise amplitude.
             octaves: float
-                Número de sub rectángulos en cada rango [0, 1].
+                Number of sub rectangles in each range [0, 1].
             seed: int 
-                Semilla específica con la que desea inicializar el generador aleatorio.
+                Specific seed you want to initialize the random generator with.
         """
         p_noise = PerlinNoise(octaves=octaves, seed=seed)
         rows, cols = terrain.shape
 
-        # Calculamos el ruido.
+        # Calculate the noise.
         noise = np.zeros((rows, cols))
         for i in range(rows):
             for j in range(cols):
                 noise[i][j] = p_noise([i/rows, j/cols])
 
-        terrain += height * (noise - np.min(noise))
+        # Apply the noise to the terrain.
+        terrain += amplitude * (noise - np.min(noise))
 
     @staticmethod
     def step(
@@ -73,22 +73,22 @@ class terrain_gen:
             height: float
         ):
         """
-            Agrega un cubo al terreno.
+            Add a cube to the terrain.
 
-            Parametros:
+            Parameters:
             -----------
             terrain: numpy.ndarray, shape (M, N)
-                Terreno a modificar.
+                Terrain to modify.
             row: int
-                Fila en la que se encuentra la esquina superior izquierda del cubo.
+                Row in which the upper left corner of the cube is located.
             col: int
-                Columna en la que se encuentra la esquina superior izquierda del cubo.
+                Column in which the upper left corner of the cube is located.
             width: int
-                Ancho (numero de filas) que ocupa el cubo.
+                Width (number of rows) that the cube occupies.
             lenght: int
-                Largo (numero de columnas) que ocupa el cubo.
+                Length (number of columns) that the cube occupies.
             height: float
-                Altura del cubo.
+                Cube height.
         """
         rows, cols = terrain.shape
         for i in range(row, min(rows, row + width)):
@@ -108,26 +108,26 @@ class terrain_gen:
             n: int
         ):
         """
-            Coloca una escalera en el terreno.
+            Place a stair on the terrain.
 
-            Parametros:
+            Parameters:
             -----------
             terrain: numpy.ndarray, shape (M, N)
-                Terreno a modificar.
+                Terrain to modify.
             row: int
-                Fila superior donde se encuentra la esquina del escalon mas bajo.
+                Top row where the corner of the lowest step is located.
             col: int
-                Columna superior donde se encuentra la esquina del escalon mas bajo.
+                Upper column where the corner of the lowest step is located.
             orientation: str, {'E', 'S', 'W', 'N'}
-                Orientacion de la escalera.
+                Orientation of the stair.
             width: int
-                Ancho de los escalones.
+                Steps width.
             length: int
-                Largo de los escalones.
+                Steps length.
             height: float
-                Altura de los escalones.
+                Steps height.
             n: int
-                Numero de escalones.
+                Number of steps.
         """
         if orientation == 'E':
             for i in range(n): 
@@ -147,18 +147,18 @@ class terrain_gen:
     @staticmethod
     def goal(terrain: np.ndarray, row: int, col: int, height: float):
         """
-            Coloca una vara vertical en el terreno.
+            Place a vertical rod on the terrain.
 
-            Argumentos:
+            Parameters:
             -----------
-            terrain: np.ndarray, shape (N, N)  
-                Terreno a modificar.
+            terrain: np.ndarray, shape (M, N)  
+                Terrain to modify.
             row: int
-                Fila donde se encuentra la vara.
+                Row where the rod is located.
             col: int
-                Columna donde se encuentra la vara.
+                Column where the rod is located.
             heihgt: int
-                Altura de la vara.
+                Rod height.
         """
         points = {
             (row-2, col), (row-1, col), (row, col), (row+1, col), (row+2, col),
@@ -175,16 +175,18 @@ class terrain_gen:
     @classmethod
     def set_goal(cls, terrain: np.ndarray, height: float) -> Tuple[int, int]:
         """
-            Coloca una vara vertical de forma aleatoria en algun punto de la 
-            circunsferencia inscrita en el terreno
+            Place a vertical rod randomly at some point on the circumference inscribed on 
+            the terrain.
         """
         rows, cols = terrain.shape
         radio = min(rows, cols) // 2 - 2
 
-        # Escogemos un angulo aleatorio
+        # Choose a random angle
         angle = uniform(0, 2 * np.pi)
         row = int(radio * (1 + np.cos(angle)))
         col = int(radio * (1 + np.sin(angle)))
+
+        # Set the goal
         cls.goal(terrain, row, col, height)
 
         return (row, col)
@@ -200,39 +202,34 @@ class terrain_gen:
             seed: int
         ) -> np.ndarray:
         """
-            Genera un terreno de colinas rugosas. Si el terreno es 500 x 500 y la escala
-            es de 1:50, entonces un buen estimado de maxima dificultad para este tipo de
-            terreno seria con los argumentos 
-                * roughness = 0.05
-                * frequency = 3.0
-                * amplitude = 3.0
+            Generates a rugged hilly terrain.
 
-            Parametros:
+            Parameters:
             -----------
             rows: int
-                Numero de filas del terreno.
+                Number of rows of the terrain.
             cols: int
-                Numero de columnas del terreno.
+                Number of columns of the terrain.
             roughness: float
-                Rugosidad del terreno. Debe estar preferiblemente en el rango [0, 0.05].
+                Roughness of the terrain. It should preferably be in the range [0, 0.05].
             frequency: float
-                Frecuencia con la que aparecen las colinas. Debe ser positivo, 
-                preferiblemente en el rango [0.2, 1]
+                How often the hills appear. It must be positive, preferably in the range 
+                [0.2, 1]
             amplitude: float
-                Altura maxima de las colinas.
+                Maximum height of the hills.
             seed: int 
-                semilla específica con la que desea inicializar el generador aleatorio.
+                Specific seed you want to initialize the random generator with.
 
             Return:
             -------
             np.ndarray
-                Terreno resultante.
+                Resulting terrain.
         """
-        # Generamos el terreno
+        # Generate the terrain
         terrain = cls.terrain(rows, cols)
         cls.perlin(terrain, amplitude, frequency, seed)
 
-        # Agregamos la rugosidad
+        # Add the roughness
         for i in range(rows):
             for j in range(cols):
                 terrain[i][j] += uniform(-roughness, roughness)
@@ -249,42 +246,38 @@ class terrain_gen:
             seed: int
         ) -> np.ndarray:
         """
-            Genera un terreno de cubos. Si el terreno es 500 x 500 y la escala es de 
-            1:50, entonces un buen estimado de maxima dificultad para este tipo de
-            terreno seria con los argumentos 
-                * width  = 10 (minimo)
-                * height = 0.4
+            Generate a cubes terrain. 
 
-            Parametros:
+            Parameters:
             -----------
             rows: int
-                Numero de filas del terreno.
+                Number of rows of the terrain.
             cols: int
-                Numero de columnas del terreno.
+                Number of columns of the terrain.
             width: int
-                Ancho y largo de los cubos.
+                Width and length of the cubes.
             height: float
-                Altura maxima de los cubos
+                Maximum height of the cubes.
             seed: int 
-                semilla específica con la que desea inicializar el generador aleatorio.
+                Specific seed you want to initialize the random generator with.
 
             Return:
             -------
             np.ndarray
-                Terreno resultante.
+                Resulting terrain.
         """
-        # Generamos el terreno
+        # Generate the terrain
         terrain = cls.terrain(rows, cols)
         p_noise = PerlinNoise(octaves=cls.STEPS_FREQUENCY, seed=seed)
 
-        # Calculamos el ruido de Perlin
+        # Calculate the Perlin noise
         noise = np.zeros((rows, cols))
         for i in range(0, rows, width):
             for j in range(0, cols, width):
                 noise[i][j] = p_noise([i/rows, j/cols]) 
                 noise[i][j] += uniform(-cls.STEPS_NOISE, cls.STEPS_NOISE)
 
-        # Agregamos los bloque siguiendo el ruido de Perlin
+        # Add the blocks following the Perlin noise
         min_noise = np.min(noise)
         for i in range(0, rows, width):
             for j in range(0, cols, width):
@@ -295,47 +288,47 @@ class terrain_gen:
     @classmethod
     def stairs(cls, rows: int, cols: int, width: int, height: float) -> np.ndarray:
         """
-            Genera un terreno de escaleras
+            Generate a terrain of stairs.
 
-            Parametros:
+            Parameters:
             -----------
             rows: int
-                Numero de filas del terreno.
+                Number of rows of the terrain.
             cols: int
-                Numero de columnas del terreno.
+                Number of columns of the terrain.
             width: int
-                Ancho de los escalones.
+                Steps width.
             height: float
-                Altura de los escalones.
+                Steps height.
 
             Return:
             -------
             np.ndarray
-                Terreno resultante.
+                Resulting terrain.
         """
         terrain = cls.terrain(rows, cols)
 
-        # Espacio ocupado por la zona central
+        # Space occupied by the central area
         middle_width = cls.ZONE_STAIRS_WIDTH
 
-        # Dividimos el terreno en 5 zonas: 3 planas y 2 de escalera. Calculamos el espacio
-        # ocupado por las escaleras
+        # We divide the terrain into 5 zones: 3 flat and 2 for stairs. Calculate the
+        # space occupied by the stairs
         stair_length = (cols - 3 * cls.ZONE_STAIRS_WIDTH) // 2
         middle_width += (cols - 3 * cls.ZONE_STAIRS_WIDTH) % 2
 
-        # Calculamos cuantos escalones toca por escalera
+        # Calculate how many steps each stair has
         n = stair_length // width
         middle_width += 2 * (stair_length % width)
         middle_col = cls.ZONE_STAIRS_WIDTH + n * width
 
-        # Calculamos la altura final de las escaleras
+        # Calculate the height of the central zone
         middle_height = (n - 1) * height
 
-        # Generamos las escaleras
+        # Generate the stairs
         cls.stair(terrain, 0, cls.ZONE_STAIRS_WIDTH, 'E', rows, width, height, n)
         cls.stair(terrain, 0, middle_col + middle_width, 'E', rows, width, height, n)
 
-        # Generamos la zona central
+        # Generate the central zone
         cls.step(terrain, 0, middle_col, rows, cols, middle_height)
 
         return terrain
@@ -343,18 +336,18 @@ class terrain_gen:
     @staticmethod
     def save(terrain: np.ndarray, filename: str):
         """
-            Almacena el terreno en un archivo de texto.
+            Stores the terrain in a text file.
 
-            Parametros:
+            Parameters:
             -----------
             terrain: numpy.ndarray, shape (M, N)
-                Terreno a almacenar.
+                Terrain to store.
             filename: str
-                Nombre del archivo donde se almacenara el terreno.
+                Name of the file where the terrain will be stored.
         """
         rows, cols = terrain.shape
 
-        # Obtenemos el string que representa al terreno.
+        # Obtain the string that represents the terrain.
         terrain_str = ''
         for i in range(rows):
             for j in range(cols):
@@ -366,7 +359,7 @@ class terrain_gen:
 
     @staticmethod
     def plot(terrain: np.ndarray):
-        """ Genera un grafico del terreno. """
+        """ Generate a plot of the terrain. """
         plt.imshow(terrain, cmap='gray')
         plt.show()
 

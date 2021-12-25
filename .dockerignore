@@ -86,4 +86,6 @@ venv/
 # Others
 docs/
 hardware/
-src/
+.catkin_workspace
+*/build_isolated/
+*/devel_isolated/
