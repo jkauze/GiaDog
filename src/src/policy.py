@@ -71,11 +71,11 @@ class teacher_policy:
         # Base horizontal linear velocity projected onto the command direction.
         proj_linear_vel = np.dot(linear_vel, target_dir)
         # Velocity orthogonal to the target direction.
-        ort_vel = (linear_vel - proj_lineal_vel * target_dir) if zero else linear_vel
-        ort_vel = numpy.linalg.norm(ort_vel)
+        ort_vel = (linear_vel - proj_linear_vel * target_dir) if zero else linear_vel
+        ort_vel = np.linalg.norm(ort_vel)
 
         # Base horizontal angular velocity.
-        hor_angular_vel = np.ndarray([angular_vel[0], angular_vel[1]])
+        h_angular_vel = np.ndarray([angular_vel[0], angular_vel[1]])
         # Base angular velocity Z projected onto desired angular velocity.
         proj_angular_vel = angular_vel[2] * turn_dir
 
@@ -85,7 +85,7 @@ class teacher_policy:
         for i in range(4):
             # If i-th foot is in swign phase.
             if ftg_freqs[i] >= cls.SWIGN_PH:
-                count_swign += 1
+                count_swing += 1
 
                 # Verify that the height of the i-th foot is greater than the height of 
                 # the surrounding terrain
@@ -105,7 +105,7 @@ class teacher_policy:
             r_lv = 1
 
         # Angular Velocity Reward
-        double r_av = 0
+        r_av = 0
         if turn_dir == 0:
             r_av = 0
         elif proj_angular_vel < cls.VEL_TH:
@@ -118,7 +118,7 @@ class teacher_policy:
         r_b = np.exp(-1.5 * ort_vel ** 2) + np.exp(-1.5 * w_2)
 
         # Foot Clearance Reward
-        r_fc = foot_clear / count_swing if count_swign > 0 else 1
+        r_fc = foot_clear / count_swing if count_swing > 0 else 1
 
         # Body Collision Reward
         r_bc = -sum(thigh_contact) - sum(shank_contact)

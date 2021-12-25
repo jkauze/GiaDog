@@ -2,13 +2,12 @@
     Authors: Amin Arriaga, Eduardo Lopez
     Project: Graduation Thesis: GIAdog
 
-    [TODO: DESCRIPTION]
+    This file provides an interface to control and monitor the simulation status.
 """
 
 # Utilities
 import time
 from typing import *
-from sys import argv, stderr
 
 # Simulacion
 import pybullet as p
@@ -17,16 +16,14 @@ from bullet_dataclasses import *
 
 # Array usage
 import numpy as np
-from scipy.interpolate import interp2d
 
-
-class Simulation:
-    """ Simulation. """
+class simulation:
+    """ Control and monitor the simulation of the spot-mini in pybullet. """
     def __init__(
             self,
             terrain_file: str, 
             giadog_urdf_file: str,
-            bullet_server: Type[p], #Basically the pybullet module
+            bullet_server, #Basically the pybullet module
             mesh_scale: List[float]=[1/50, 1/50, 1],
             actuated_joints_ids: List[int] = [7,8,9, 11,12,13, 16,17,18, 20,21,22], 
             thighs_ids: List[int] = [8, 12, 17, 18],
@@ -85,7 +82,6 @@ class Simulation:
                     Simulation gravity vector.
                     Default: [0, 0, -9.807]
         """
-        
         self.giadog_urdf_file = giadog_urdf_file
         self.p = bullet_server
         self.mesh_scale = mesh_scale
@@ -94,7 +90,7 @@ class Simulation:
         # This array is used to calculate the robot toes heightfields 
         # Note : The last column is ignored because numpy adds a column of nans while 
         # reading the file
-        self.terrain_array    = np.genfromtxt(self.terrain_file,  delimiter=",")[:, :-1]
+        self.terrain_array = np.genfromtxt(self.terrain_file,  delimiter=",")[:, :-1]
 
         # Robot joint ids
         self.actuated_joints_ids = actuated_joints_ids
@@ -138,7 +134,7 @@ class Simulation:
 
         # Extra sensor (This may be used in the future)
         self.toe_force_sensor = np.zeros(4) 
-          
+
     @staticmethod
     def _get_foot_height_scan_coordinates(x: float, y: float, alpha: float) -> np.ndarray:
         """
@@ -212,7 +208,7 @@ class Simulation:
         contact_force /= contact_force_mag
 
         return (contact_force_mag, fricction_coefficient, contact_force)
-        
+
     def initialize(self, x_o: float=0.0, y_o: float=0.0):
         """
             Initializes a pybullet simulation, setting up the terrain, gravity and the 
@@ -256,8 +252,7 @@ class Simulation:
                 jointIndex   = toe_id,
                 enableSensor = True,
             )
-            
-        
+
     def get_terrain_height(
             self,
             x: float,
@@ -343,27 +338,27 @@ class Simulation:
                 * joint_velocities
                 * joint_torques
         """
-        #---------------------------Historic Data Update---------------------------------#
+        # ========================= Historic Data Update =========================  #
         # TODO
         self.joint_position_error_history[1] = self.joint_velocity_history[0]
         #self.joint_position_error_history[0] = self.joint_position_error 
-
         self.joint_velocity_history[1] = self.joint_velocity_history[0]
         self.joint_velocity_history[0] = self.joint_velocities 
-        
         self.foot_target_history[1]  = self.foot_target_history[0]
         #self.foot_target_history[0]  = self.foot_target
 
-        #-----------------------------Base Velocity--------------------------------------#
+
+        # =========================  Base Velocity =========================  #
         self.base_linear_velocity, self.base_angular_velocity  = np.array(
             self.p.getBaseVelocity(self.quadruped)
         )
 
-        #-----------------------------Contact info---------------------------------------#
-        # Toes//Feet//Patitas
+
+        # ========================= Contact info ========================= #
+        # Toes
         self.terrain_normal_at_each_toe = np.zeros([4, 3])
         self.contact_force_at_each_toe = np.zeros([4])
-        self.toes_contact_states = np.zeros([4])
+        self.toes_contact_states = np.zeros([4], dtype=np.int)
         self.foot_ground_friction_coefficients = np.zeros([4])
         for i, toe_id in enumerate(self.toes_ids):
             # Privileged information
@@ -373,24 +368,23 @@ class Simulation:
                 linkIndexA = toe_id
             )
 
-            if toe_contact_info == (): #No contact case
+            # No contact case
+            if toe_contact_info == (): 
                 self.terrain_normal_at_each_toe[i] = (0,0,0)
                 self.contact_force_at_each_toe[i] = 0 
                 self.foot_ground_friction_coefficients[i] = 0 
                 self.toes_contact_states[i] = 0
-            
             else:
                 contact_force, fricction_coefficient, normal = self._contact_info_average(
                     [ContactInfo(*elem) for elem in  (toe_contact_info)]
                 )
-            
                 self.terrain_normal_at_each_toe[i] = normal
                 self.contact_force_at_each_toe[i] = contact_force
                 self.foot_ground_friction_coefficients[i] = fricction_coefficient
                 self.toes_contact_states[i] = 1
         
-        # Thighs//Muslos
-        self.thighs_contact_states = np.zeros([4])
+        # Thighs
+        self.thighs_contact_states = np.zeros([4], dtype=np.int)
         for i, thigh_id in enumerate(self.thighs_ids):
             thigh_contact_info = self.p.getContactPoints(
                 bodyA  = self.quadruped, 
@@ -399,8 +393,8 @@ class Simulation:
             )
             self.thighs_contact_states[i] = float(thigh_contact_info != ())
             
-        # Shanks//Canillas
-        self.shanks_contact_states = np.zeros([4])
+        # Shanks
+        self.shanks_contact_states = np.zeros([4], dtype=np.int)
         for i, shank_id in enumerate(self.shanks_ids):
             shank_contact_info = self.p.getContactPoints(
                 bodyA  = self.quadruped, 
@@ -409,9 +403,10 @@ class Simulation:
             )
             self.shanks_contact_states[i] = float(shank_contact_info != ())
         
-        #-----------------------------Height Scan----------------------------------------# 
-        self.height_scan_at_each_toe = np.zeros([4, 9]) # 9 scan points around each toe
-        
+
+        # ========================= Height Scan ========================= # 
+        # 9 scan points around each toe
+        self.height_scan_at_each_toe = np.zeros([4, 9]) 
         for i, toe_link_state in enumerate(
             self.p.getLinkStates(self.quadruped, self.toes_ids)
             ):
@@ -429,7 +424,8 @@ class Simulation:
             )
             self.height_scan_at_each_toe[i] = [z_t - z for z_t in z_terrain]
 
-        #-----------------------------Toe Force Sensors----------------------------------#
+
+        # ========================= Toe Force Sensors ========================= #
         toe_force_sensor_threshold = 6 # Newtons 
         self.toe_force_sensor = np.zeros(4) # 4 = Number of toes
         for i, toe_joint_state in enumerate(self.p.getJointStates(
@@ -442,8 +438,9 @@ class Simulation:
             F = float(abs(F_x) + abs(F_y) + abs(F_z))
             self.toe_force_sensor[i] = F > toe_force_sensor_threshold
 
-        #--------------------------Actuated joints sensors-------------------------------#
-        # (Position/Velocity/Torque)    
+
+        # ========================= Actuated joints sensors ========================= #
+        # (Position / Velocity / Torque)    
         # Joint angles
         self.joint_angles = np.zeros(12) # 12 = Number of DOF // Controlled joints
         self.joint_velocities = np.zeros(12)
@@ -457,7 +454,6 @@ class Simulation:
             self.joint_angles[i] = j_state.jointPosition
             self.joint_velocities[i] = j_state.jointVelocity
             self.joint_torques[i] = j_state.appliedJointMotorTorque
-        
 
     def actuate_joints(self, joint_target_positions: List[float]):
         """
@@ -499,72 +495,23 @@ class Simulation:
         for i, points in enumerate(self.height_scan_lines): # 
             for point in points:
                 self.p.addUserDebugLine(point[0], point[1], (0, 1, 0), lifeTime = 3)
-                
-    def test_terrain(
-        self, 
-        terrain_file: str, 
-        giadog_file: str,
-        mesh_scale: List[int]=[1/50, 1/50, 1],
-        init: Tuple[int, int]=(0, 0)
-    ):
-        """
-            Genera una simulacion de prueba para un terreno especificado.
 
-            Arguments:
-            ----------
-                terrain_file: str 
-                    Direccion del archivo que contiene el terreno.
-                giadog_file: str
-                    Direccion del archivo que contiene la especificacion del agente.
-                mesh_scale: List[int], shape (3,), optional
-                    Lista 3D que representa la scala del terreno.
-                    Default: [1/50, 1/50, 1]
-                init: Tuple[int, int], optional
-                    Coordenada inicial. La altura es calculada de forma automatica. 
-                    Default: (0, 0)
-        """
-        # Obtenemos el numero de filas y columnas
-        h = 5
-
-        # Conectamos pybullet
-        p.connect(p.GUI)
-        #p.setAdditionalSearchPath(pd.getDataPath())
-        
-        # Configuracion del terreno
-        terrain_shape = p.createCollisionShape(
-            shapeType=p.GEOM_HEIGHTFIELD, 
-            meshScale=mesh_scale,
-            fileName=terrain_file, 
-            heightfieldTextureScaling=128
-        )
-        terrain = p.createMultiBody(0, terrain_shape)
-        p.resetBasePositionAndOrientation(terrain,[0,0,0], [0,0,0,1])
-        p.setGravity(0, 0, -9.807)
-
-        # Agregamos al agente GIAdog
-        p.loadURDF(giadog_file, [init[0], init[1], h])
-
-        while True: 
-            p.stepSimulation()
-            time.sleep(0.01)
-    
     def test_sensors(self):
-        """ Genera una simulacion para probar de los "sensores" del robot. """
+        """ Generate a simulation to test the robot's sensors."""
         t = 0
         while True: 
             self.p.stepSimulation()
             self.update_sensor_output()
             time.sleep(1/240)
             t = t+1
-            if t % 120 == 0:
-                self.draw_height_field_lines()
+            if t % 120 == 0: self.draw_height_field_lines()
 
 if __name__ == '__main__':
-    spot_urdf_file = "mini_ros/urdf/spot.urdf"
+    spot_urdf_file = "../mini_ros/urdf/spot.urdf"
     terrain_file = "../test_terrains/maincra.txt" 
 
-    sim = Simulation(terrain_file, spot_urdf_file,p)
-    sim.initialize()    
+    sim = simulation(terrain_file, spot_urdf_file, p)
+    sim.initialize() 
 
     sim.test_sensors()
-            
+
