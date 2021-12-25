@@ -124,7 +124,6 @@ roscore > /dev/null &
 rosrun spot_mini_ros simulate.py <ARGS>
 ```
 
-
 ### Terrain generation
 
 The generation of terrain in a simulation allows the agent to learn to move in various
@@ -205,3 +204,17 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 Project Link: [https://github.com/eduardo98m/open-blacky](https://github.com/eduardo98m/open-blacky)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
+
+https://github.com/eduardo98m/open-blacky
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[contributors-shield]: https://img.shields.io/github/contributors/eduardo98m/open-blacky.svg?style=for-the-badge
+[contributors-url]: https://github.com/eduardo98m/open-blacky/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/eduardo98m/open-blacky.svg?style=for-the-badge
+[forks-url]: https://github.com/eduardo98m/open-blackye/network/members
+[stars-shield]: https://img.shields.io/github/stars/eduardo98m/open-blacky.svg?style=for-the-badge
+[stars-url]: https://github.com/eduardo98m/open-blacky/stargazers
+[issues-shield]: https://img.shields.io/github/issues/eduardo98m/open-blacky.svg?style=for-the-badge
+[issues-url]: https://github.com/eduardo98m/open-blackye/issues
+[license-shield]: https://img.shields.io/github/license/eduardo98m/open-blacky.svg?style=for-the-badge
+[license-url]: https://github.com/eduardo98m/open-blackye/blob/master/LICENSE.txt
