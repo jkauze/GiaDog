@@ -330,6 +330,8 @@ class terrain_gen:
 
         # Generate the central zone
         cls.step(terrain, 0, middle_col, rows, cols, middle_height)
+        # Generate the final zone
+        cls.step(terrain, 0, cols - cls.ZONE_STAIRS_WIDTH, rows, cols, (n - 1) * height)
 
         return terrain
 

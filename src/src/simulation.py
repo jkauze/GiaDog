@@ -37,7 +37,7 @@ class simulation:
                 terrain_file: str
                     Path to the .txt file representing the terrain.
                 giadog_urdf_file: str 
-                    Path to the URDF file of the quadruped robot
+                    Path to the URDF file of the quadruped robot.
                 bullet_server: module 
                     Pybullet module.
                 mesh_scale: List[float], shape (3,), optional 
@@ -209,7 +209,7 @@ class simulation:
 
         return (contact_force_mag, fricction_coefficient, contact_force)
 
-    def initialize(self, x_o: float=0.0, y_o: float=0.0):
+    def initialize(self, x_o: float=0.0, y_o: float=0.0, gui: bool=False):
         """
             Initializes a pybullet simulation, setting up the terrain, gravity and the 
             quadruped in the pybullet enviroment. (And enabiling the torque sensors in the 
@@ -223,8 +223,11 @@ class simulation:
             y: float, optional
                 y coordintate of the robot initial position (In the world frame).
                 Default: 0.0
+            gui: bool, optional
+                Indicates if the simulation GUI will be displayed.
+                Default: False
         """
-        self.p.connect(self.p.GUI)
+        self.p.connect(self.p.GUI if gui else self.p.DIRECT)
 
         # Create terrain object
         terrain_shape = self.p.createCollisionShape(
@@ -237,10 +240,21 @@ class simulation:
         self.p.resetBasePositionAndOrientation(self.terrain, [0,0,0], [0,0,0,1])
         self.p.setGravity(*self.gravity_vector)
 
+        # Obtain the maximum height around the starting point
+        z_o = -50.0
+        x = x_o - 0.2
+        while x <= x_o + 0.2:
+            y = y_o - 0.2
+            while y <= y_o + 0.2:
+                z_o = max(z_o, self.get_terrain_height(x, y))
+                y += 0.05
+            x += 0.05
+
         # Load mini-spot from URDF file.
+        print(f'[i] Initial position: ({x_o}, {y_o}, {z_o})')
         self.quadruped = self.p.loadURDF(
             self.giadog_urdf_file, 
-            [x_o, y_o, self.get_terrain_height(x_o, y_o, 0) + 0.3],
+            [x_o, y_o, z_o + 0.3],
             flags = self.p.URDF_USE_SELF_COLLISION | \
                 self.p.URDF_USE_SELF_COLLISION_INCLUDE_PARENT
         )
@@ -257,7 +271,6 @@ class simulation:
             self,
             x: float,
             y: float,
-            z_o: float,
             z_min: float=-50.0,
             z_max: float=50.0
         ) -> float:
@@ -276,8 +289,6 @@ class simulation:
                 x position in cartesian global coordinates.
             y: float
                 y position in cartesian global coordinates.
-            z_o: float
-                z position in cartesian global coordinates for the ray to be casted
             z_min: float, optional 
                 Minimum height where the ray is gonna be casted.  
                 Should be below the min terrain height.
@@ -293,19 +304,154 @@ class simulation:
                 The terrain height at that x, y point.
                 If the rays does not intecept the terrain it returns np.NaN
         """
-        ray_info = self.p.rayTest((x, y, z_min),(x, y, z_o))[0]
-        if ray_info[0] == self.terrain: return ray_info[3][-1]
-
-        ray_info = self.p.rayTest((x, y, z_max),(x, y, z_o))[0]
-        if ray_info[0] == self.terrain: return ray_info[3][-1]
-        
-        ray_info = self.p.rayTest((x, y, z_o),(x, y, z_min))[0]
-        if ray_info[0] == self.terrain: return ray_info[3][-1]
-
-        ray_info = self.p.rayTest((x, y, z_o),(x, y, z_max))[0]
+        ray_info = self.p.rayTest((x, y, z_min),(x, y, z_max))[0]
         if ray_info[0] == self.terrain: return ray_info[3][-1]
     
         return np.NaN
+
+    def update_historic_data(self):
+        """ 
+            Updates the joint position error history for the current simulation step.
+        """
+        # TODO
+        self.joint_position_error_history[1] = self.joint_velocity_history[0]
+        #self.joint_position_error_history[0] = self.joint_position_error 
+        self.joint_velocity_history[1] = self.joint_velocity_history[0]
+        self.joint_velocity_history[0] = self.joint_velocities 
+        self.foot_target_history[1]  = self.foot_target_history[0]
+        #self.foot_target_history[0]  = self.foot_target
+
+    def update_base_velocity(self):
+        """
+            Updates the base linear and angular velocity for the current simulation step.
+        """
+        self.base_linear_velocity, self.base_angular_velocity  = np.array(
+            self.p.getBaseVelocity(self.quadruped)
+        )
+
+    def update_toes_contact_info(self):
+        """
+            Updates the contact info for each toe for the current simulation steps. The
+            contact info include:
+                * terrain_normal_at_each_toe
+                * contact_force_at_each_toe
+                * foot_ground_friction_coefficients
+                * toes_contact_states
+        """
+        self.terrain_normal_at_each_toe = np.zeros([4, 3])
+        self.contact_force_at_each_toe = np.zeros([4])
+        self.toes_contact_states = np.zeros([4], dtype=np.int)
+        self.foot_ground_friction_coefficients = np.zeros([4])
+        
+        for i, toe_id in enumerate(self.toes_ids):
+            # Privileged information
+            toe_contact_info = self.p.getContactPoints(
+                bodyA = self.quadruped, 
+                bodyB = self.terrain, 
+                linkIndexA = toe_id
+            )
+
+            # No contact case
+            if toe_contact_info == (): 
+                self.terrain_normal_at_each_toe[i] = (0,0,0)
+                self.contact_force_at_each_toe[i] = 0 
+                self.foot_ground_friction_coefficients[i] = 0 
+                self.toes_contact_states[i] = 0
+            else:
+                contact_force, fricction_coefficient, normal = self._contact_info_average(
+                    [ContactInfo(*elem) for elem in  (toe_contact_info)]
+                )
+                self.terrain_normal_at_each_toe[i] = normal
+                self.contact_force_at_each_toe[i] = contact_force
+                self.foot_ground_friction_coefficients[i] = fricction_coefficient
+                self.toes_contact_states[i] = 1
+
+    def update_thighs_contact_info(self):
+        """
+            Updates the contact info for each thigh for the current simulation step.
+        """
+        self.thighs_contact_states = np.zeros([4], dtype=np.int)
+
+        for i, thigh_id in enumerate(self.thighs_ids):
+            thigh_contact_info = self.p.getContactPoints(
+                bodyA  = self.quadruped, 
+                bodyB = self.terrain, 
+                linkIndexA = thigh_id
+            )
+            self.thighs_contact_states[i] = int(thigh_contact_info != ())
+
+    def update_shanks_contact_info(self):
+        """
+            Updates the contact info for each shank for the current simulation step.
+        """
+        self.shanks_contact_states = np.zeros([4], dtype=np.int)
+        for i, shank_id in enumerate(self.shanks_ids):
+            shank_contact_info = self.p.getContactPoints(
+                bodyA  = self.quadruped, 
+                bodyB = self.terrain, 
+                linkIndexA = shank_id
+            )
+            self.shanks_contact_states[i] = int(shank_contact_info != ())
+
+    def update_height_scan(self):
+        """
+            Update the height scan for each step for the current simulation step.
+        """
+        # 9 scan points around each toe
+        self.height_scan_at_each_toe = np.zeros([4, 9]) 
+        for i, toe_link_state in enumerate(
+            self.p.getLinkStates(self.quadruped, self.toes_ids)
+            ):
+            toe_link_state =  LinkState(*toe_link_state)
+            toe_orientation = toe_link_state.linkWorldOrientation
+            toe_position =  toe_link_state.linkWorldPosition
+        
+            # Height scan around each foot 
+            roll, pitch, yaw = self.p.getEulerFromQuaternion(toe_orientation)
+            x,y,z =  toe_position 
+            P = self._get_foot_height_scan_coordinates(x,y,yaw) 
+            z_terrain = [self.get_terrain_height(x_p,y_p,z) for (x_p,y_p) in P]
+            self.height_scan_lines[i] = np.array([ 
+                [[x, y, z], [x_p, y_p, z_t]] for (x_p, y_p), z_t in zip(P, z_terrain)]
+            )
+            self.height_scan_at_each_toe[i] = [z_t - z for z_t in z_terrain]
+
+    def update_toes_force(self):
+        """
+            Update force in each step for the current simulation step.
+        """
+        toe_force_sensor_threshold = 6      # Newtons 
+        self.toe_force_sensor = np.zeros(4) # 4 = Number of toes
+
+        for i, toe_joint_state in enumerate(self.p.getJointStates(
+                bodyUniqueId = self.quadruped, 
+                jointIndices = self.toes_ids
+            )):
+            toe_joint_state = JointState(*toe_joint_state) 
+            # "Analog" toe force sensor
+            F_x, F_y, F_z, _, _, _ = toe_joint_state.jointReactionForces
+            F = float(abs(F_x) + abs(F_y) + abs(F_z))
+            self.toe_force_sensor[i] = F > toe_force_sensor_threshold
+
+    def update_joints_sensors(self):
+        """
+            Update position, velocity and torque for each joint for the current
+            simulation step.
+        """
+        # (Position / Velocity / Torque)    
+        # Joint angles
+        self.joint_angles = np.zeros(12)      # 12 = Number of DOF // Controlled joints
+        self.joint_velocities = np.zeros(12)
+        self.joint_torques = np.zeros(12)     # For reward calculations   
+        
+        for i, j_state in enumerate(self.p.getJointStates(
+                bodyUniqueId = self.quadruped,
+                jointIndices = self.actuated_joints_ids
+            )):
+            j_state = JointState(*j_state)
+            self.joint_angles[i] = j_state.jointPosition
+            self.joint_velocities[i] = j_state.jointVelocity
+            self.joint_torques[i] = j_state.appliedJointMotorTorque
 
     def update_sensor_output(self):
         """
@@ -338,122 +484,14 @@ class simulation:
                 * joint_velocities
                 * joint_torques
         """
-        # ========================= Historic Data Update =========================  #
-        # TODO
-        self.joint_position_error_history[1] = self.joint_velocity_history[0]
-        #self.joint_position_error_history[0] = self.joint_position_error 
-        self.joint_velocity_history[1] = self.joint_velocity_history[0]
-        self.joint_velocity_history[0] = self.joint_velocities 
-        self.foot_target_history[1]  = self.foot_target_history[0]
-        #self.foot_target_history[0]  = self.foot_target
-
-
-        # =========================  Base Velocity =========================  #
-        self.base_linear_velocity, self.base_angular_velocity  = np.array(
-            self.p.getBaseVelocity(self.quadruped)
-        )
-
-
-        # ========================= Contact info ========================= #
-        # Toes
-        self.terrain_normal_at_each_toe = np.zeros([4, 3])
-        self.contact_force_at_each_toe = np.zeros([4])
-        self.toes_contact_states = np.zeros([4], dtype=np.int)
-        self.foot_ground_friction_coefficients = np.zeros([4])
-        for i, toe_id in enumerate(self.toes_ids):
-            # Privileged information
-            toe_contact_info = self.p.getContactPoints(
-                bodyA = self.quadruped, 
-                bodyB = self.terrain, 
-                linkIndexA = toe_id
-            )
-
-            # No contact case
-            if toe_contact_info == (): 
-                self.terrain_normal_at_each_toe[i] = (0,0,0)
-                self.contact_force_at_each_toe[i] = 0 
-                self.foot_ground_friction_coefficients[i] = 0 
-                self.toes_contact_states[i] = 0
-            else:
-                contact_force, fricction_coefficient, normal = self._contact_info_average(
-                    [ContactInfo(*elem) for elem in  (toe_contact_info)]
-                )
-                self.terrain_normal_at_each_toe[i] = normal
-                self.contact_force_at_each_toe[i] = contact_force
-                self.foot_ground_friction_coefficients[i] = fricction_coefficient
-                self.toes_contact_states[i] = 1
-        
-        # Thighs
-        self.thighs_contact_states = np.zeros([4], dtype=np.int)
-        for i, thigh_id in enumerate(self.thighs_ids):
-            thigh_contact_info = self.p.getContactPoints(
-                bodyA  = self.quadruped, 
-                bodyB = self.terrain, 
-                linkIndexA = thigh_id
-            )
-            self.thighs_contact_states[i] = float(thigh_contact_info != ())
-            
-        # Shanks
-        self.shanks_contact_states = np.zeros([4], dtype=np.int)
-        for i, shank_id in enumerate(self.shanks_ids):
-            shank_contact_info = self.p.getContactPoints(
-                bodyA  = self.quadruped, 
-                bodyB = self.terrain, 
-                linkIndexA = shank_id
-            )
-            self.shanks_contact_states[i] = float(shank_contact_info != ())
-        
-
-        # ========================= Height Scan ========================= # 
-        # 9 scan points around each toe
-        self.height_scan_at_each_toe = np.zeros([4, 9]) 
-        for i, toe_link_state in enumerate(
-            self.p.getLinkStates(self.quadruped, self.toes_ids)
-            ):
-            toe_link_state =  LinkState(*toe_link_state)
-            toe_orientation = toe_link_state.linkWorldOrientation
-            toe_position =  toe_link_state.linkWorldPosition
-        
-            # Height scan around each foot 
-            roll, pitch, yaw = self.p.getEulerFromQuaternion(toe_orientation)
-            x,y,z =  toe_position 
-            P = self._get_foot_height_scan_coordinates(x,y,yaw) 
-            z_terrain = [self.get_terrain_height(x_p,y_p,z) for (x_p,y_p) in P]
-            self.height_scan_lines[i] = np.array([ 
-                [[x, y, z], [x_p, y_p, z_t]] for (x_p, y_p), z_t in zip(P, z_terrain)]
-            )
-            self.height_scan_at_each_toe[i] = [z_t - z for z_t in z_terrain]
-
-
-        # ========================= Toe Force Sensors ========================= #
-        toe_force_sensor_threshold = 6 # Newtons 
-        self.toe_force_sensor = np.zeros(4) # 4 = Number of toes
-        for i, toe_joint_state in enumerate(self.p.getJointStates(
-                bodyUniqueId = self.quadruped, 
-                jointIndices = self.toes_ids
-            )):
-            toe_joint_state = JointState(*toe_joint_state) 
-            # "Analog" toe force sensor
-            F_x, F_y, F_z, _, _, _ = toe_joint_state.jointReactionForces
-            F = float(abs(F_x) + abs(F_y) + abs(F_z))
-            self.toe_force_sensor[i] = F > toe_force_sensor_threshold
-
-
-        # ========================= Actuated joints sensors ========================= #
-        # (Position / Velocity / Torque)    
-        # Joint angles
-        self.joint_angles = np.zeros(12) # 12 = Number of DOF // Controlled joints
-        self.joint_velocities = np.zeros(12)
-        self.joint_torques = np.zeros(12) # For reward calculations   
-        
-        for i, j_state in enumerate(self.p.getJointStates(
-                bodyUniqueId = self.quadruped,
-                jointIndices = self.actuated_joints_ids
-            )):
-            j_state = JointState(*j_state)
-            self.joint_angles[i] = j_state.jointPosition
-            self.joint_velocities[i] = j_state.jointVelocity
-            self.joint_torques[i] = j_state.appliedJointMotorTorque
+        self.update_historic_data()
+        self.update_base_velocity()
+        self.update_toes_contact_info()
+        self.update_thighs_contact_info()
+        self.update_shanks_contact_info()
+        self.update_height_scan()
+        self.update_toes_force()
+        self.update_joints_sensors()
 
     def actuate_joints(self, joint_target_positions: List[float]):
         """

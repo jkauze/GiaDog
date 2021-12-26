@@ -52,6 +52,7 @@
     <ul>
     <li><a href="#prerequisites">Prerequisites</a></li>
     <li><a href="#installation">Installation</a></li>
+    <li><a href="#google-colab">Google Colab</a></li>
     </ul>
 </li>
 <li><a href="#usage">Usage</a></li>
@@ -82,11 +83,14 @@
 ### Installation
 
 1. Build the docker image.
+
 ```bash
 docker build . -t open-blacky
 ```
 
-2. Run the container of said image. It is necessary to allow the container to connect with the host's display in order to view the simulation
+2. Run the container of said image. It is necessary to allow the container to connect
+ with the host's display in order to view the simulation
+
 ```bash
 xhost +
 sudo docker run \
@@ -106,6 +110,7 @@ sudo docker run \
 ```
 
 3. Once inside the container, build the ROS package
+
 ```bash
 source /opt/ros/melodic/setup.bash 
 catkin_make_isolated
@@ -113,6 +118,15 @@ echo -e "\nsource /opt/ros/melodic/setup.bash" >> ~/.bashrc
 echo -e "source ${OPEN_BLACKY_DIR}/devel_isolated/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
+
+### Google Colab
+
+The repository can also be run in [Google Colab](https://colab.research.google.com/) 
+following the instructions in the following 
+[notebook](https://colab.research.google.com/drive/1I88SeRK-xUmy_r_ZAUL5AZcPFmv57xnI?usp=sharing). 
+With the limitation that the simulation GUI cannot be executed since Google Colab does 
+not have X server and the sessions (free) are limited to 9 continuous hours maximum.
+
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
