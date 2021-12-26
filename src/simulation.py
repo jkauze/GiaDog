@@ -565,9 +565,7 @@ class Simulation:
 		for i, points in enumerate(self.height_scan_lines): # 
 			
 			for point in points:
-				
-				
-				
+							
 				self.p.addUserDebugLine(point[0], point[1], (0, 1, 0), lifeTime = 3)
 				
 
@@ -645,6 +643,50 @@ class Simulation:
 			if t%120 == 0:
 				self.draw_height_field_lines()
 
+	
+	def test_friction(self):
+		"""
+			ESP:
+			
+			Genera una simulacion para probar el cambio de la friccion en 
+
+			ENG:
+		"""
+
+		t = 0
+		friction = 0.4
+		while True: 
+			self.p.stepSimulation()
+			self.update_sensor_output()
+			time.sleep(1/240)
+			t = t+1
+			if t%30 == 0:
+				print(self.foot_ground_friction_coefficients)
+
+			if t%120 == 0:
+				for toe_id in self.toes_ids:
+					self.p.changeDynamics(self.quadruped, toe_id, 
+										   lateralFriction = friction)
+				print('friction = ', friction)
+				friction = (friction==0.4)*0.9 + (friction==0.9)*0.1 + (friction==0.1)*0.4 
+	
+	
+	def set_toes_friction_coefficients(self, friction_coefficient):
+		"""
+		Changes the friction coeficient of the quadruped toes. It sets the lateral 
+		friction coeficient (the one that is mainly used by pybullet)
+
+		Args:
+			self: Simulation  ->  Simulation class
+
+			friction_coefficient: float -> The desired friction coeficient to be 
+			set on the quadruped toes.
+		"""
+		for toe_id in self.toes_ids:
+			self.p.changeDynamics(self.quadruped, toe_id, 
+			lateralFriction = friction_coefficient)
+				
+
 
 		
 
@@ -666,10 +708,10 @@ if __name__ == '__main__':
 	
 	"""
 	spot_urdf_file = "mini_ros/urdf/spot.urdf"
-	terrain_file = "../test_terrains/maincra.txt" 
+	terrain_file = "../test_terrains/hill_test.txt" 
 
 	sim = Simulation(terrain_file, spot_urdf_file,p)
 	sim.initialize()	
 
-	sim.test_sensors()
+	sim.test_friction()
 			
