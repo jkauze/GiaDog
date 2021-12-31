@@ -47,7 +47,6 @@ add_message_files(
   FILES
   joint_angles.msg
   spot_state.msg
-  priviliged_spot_state.msg
 )
 
 ## Generate added messages and services with any dependencies listed here

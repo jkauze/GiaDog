@@ -19,7 +19,7 @@ import rospy
 import pybullet as p
 from simulation import simulation
 from terrain_gen import terrain_gen
-from spot_mini_ros.msg import spot_state, priviliged_spot_state, joint_angles
+from spot_mini_ros.msg import spot_state, joint_angles
 
 # Rate messages for second
 RATE   = 10
@@ -128,8 +128,7 @@ def update_joints_sensors(sim: simulation, steps_per_second: int):
 
 def spot_state_publisher(sim: simulation):
     """
-        Function in charge of publishing through a ROS topic the non-privileged 
-        information (that would be obtained through real sensors) of the spot-mini.
+        Function in charge of publishing through a ROS topic the data from simulation.
     """
     try:
         # Init node
@@ -141,13 +140,41 @@ def spot_state_publisher(sim: simulation):
         while not rospy.is_shutdown():
             # Create message
             msg = spot_state()
+
+            # Velocities
             msg.linear_vel       = list(sim.base_linear_velocity)
             msg.angular_vel      = list(sim.base_angular_velocity)
+
+            # Contact states
             msg.toes_contact     = list(sim.toes_contact_states)
             msg.thighs_contact   = list(sim.thighs_contact_states)
             msg.shanks_contact   = list(sim.shanks_contact_states)
+
+            # Joints states
             msg.joint_angles     = list(sim.joint_angles)
             msg.joint_velocities = list(sim.joint_velocities)
+
+            # ===================== Privileged Data ===================== #
+            msg.joint_torques    = list(sim.joint_torques)
+
+            # Normal at each toe
+            msg.normal_toe_fl    = list(sim.terrain_normal_at_each_toe[0])
+            msg.normal_toe_fr    = list(sim.terrain_normal_at_each_toe[1])
+            msg.normal_toe_bl    = list(sim.terrain_normal_at_each_toe[2])
+            msg.normal_toe_br    = list(sim.terrain_normal_at_each_toe[3])
+
+            # Force at each toe
+            msg.toes_force1      = list(sim.contact_force_at_each_toe)
+            msg.toes_force2      = list(sim.toe_force_sensor)
+
+            # Ground friction coefficients at each toe 
+            msg.ground_friction  = list(sim.foot_ground_friction_coefficients)
+
+            # Height scan at each toe 
+            msg.height_scan_fl   = list(sim.height_scan_at_each_toe[0])
+            msg.height_scan_fr   = list(sim.height_scan_at_each_toe[1])
+            msg.height_scan_bl   = list(sim.height_scan_at_each_toe[2])
+            msg.height_scan_br   = list(sim.height_scan_at_each_toe[3])
 
             # Publish
             pub.publish(msg)
@@ -156,45 +183,6 @@ def spot_state_publisher(sim: simulation):
     except rospy.ROSInterruptException:
         print('[w] Topic "spot_state" was stopped.')
 
-def priviliged_spot_state_publisher(sim: simulation):
-    """
-        Function in charge of publishing through a ROS topic the privileged information 
-        (which will not be obtained through real sensors, but only in the simulation) of 
-        the spot-mini.
-    """
-    try:
-        # Init node.
-        pub = rospy.Publisher(
-            'priviliged_spot_state', 
-            priviliged_spot_state, 
-            queue_size=RATE
-        )
-
-        # Run until manually stopped
-        print('[i] Topic "priviliged_spot_state" is running!')
-        rate = rospy.Rate(RATE) 
-        while not rospy.is_shutdown():
-            # Create message
-            msg = priviliged_spot_state()
-            msg.normal_toe_fl   = list(sim.terrain_normal_at_each_toe[0])
-            msg.normal_toe_fr   = list(sim.terrain_normal_at_each_toe[1])
-            msg.normal_toe_bl   = list(sim.terrain_normal_at_each_toe[2])
-            msg.normal_toe_br   = list(sim.terrain_normal_at_each_toe[3])
-            msg.toes_force1     = list(sim.contact_force_at_each_toe)
-            msg.toes_force2     = list(sim.toe_force_sensor)
-            msg.ground_friction = list(sim.foot_ground_friction_coefficients)
-            msg.height_scan_fl  = list(sim.height_scan_at_each_toe[0])
-            msg.height_scan_fr  = list(sim.height_scan_at_each_toe[1])
-            msg.height_scan_bl  = list(sim.height_scan_at_each_toe[2])
-            msg.height_scan_br  = list(sim.height_scan_at_each_toe[3])
-            msg.joint_torques   = list(sim.joint_torques)
-
-            # Publish
-            pub.publish(msg)
-            rate.sleep()
-    except rospy.ROSInterruptException:
-        print('[w] Topic "priviliged_spot_state" was stopped.')
-    
 def joint_angles_setter(sim: simulation):
     try:
         def actuate_joints(data, sim: simulation=sim):
@@ -352,11 +340,9 @@ if __name__ == '__main__':
     sensores_ths.append(Thread(target=update_joints_sensors, args=args))
     for th in sensores_ths: th.start()
 
-    # Threads that publish the value of each sensor in ROS.
-    pub_th1 = Thread(target=spot_state_publisher, args=(sim,))
-    pub_th2 = Thread(target=priviliged_spot_state_publisher, args=(sim,))
-    pub_th1.start()
-    pub_th2.start()
+    # Thread that publish the value of each sensor in ROS.
+    pub_th = Thread(target=spot_state_publisher, args=(sim,))
+    pub_th.start()
 
     # Thread that receives data through ROS to update the joints.
     joint_th = Thread(target=joint_angles_setter, args=(sim,))
