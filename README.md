@@ -21,7 +21,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/eduardo98m/open-blacky">
-    <img src="media/logo.png" alt="Logo [TODO]" width="80" height="80">
+    <img src="media/logo.png" alt="Logo [TODO]" width="400" height="200">
   </a>
 
   <h3 align="center">Open Blacky</h3>
