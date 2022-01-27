@@ -3,9 +3,9 @@ FROM ros:melodic
 SHELL ["/bin/bash", "-c"]
 
 # Create work directory
-ENV OPEN_BLACKY_DIR '/usr/src/open_blacky'
-RUN mkdir -p ${OPEN_BLACKY_DIR}
-WORKDIR ${OPEN_BLACKY_DIR}
+ENV GIADOG_DIR '/usr/src/GiaDog'
+RUN mkdir -p ${GIADOG_DIR}
+WORKDIR ${GIADOG_DIR}
 
 # Install dependencies
 RUN apt update && \

@@ -20,21 +20,21 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/eduardo98m/open-blacky">
+  <a href="https://github.com/eduardo98m/GiaDog">
     <img src="media/logo.png" alt="Logo [TODO]" width="400" height="200">
   </a>
 
-  <h3 align="center">Open Blacky</h3>
+  <h3 align="center">Gia Dog</h3>
 
   <p align="center">
     Simulation environment for training spot-mini robots in quadruped locomotion using reinforced learning
     <br />
-    <a href="https://github.com/eduardo98m/open-blacky"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/eduardo98m/GiaDog"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/eduardo98m/open-blacky">View Demo</a>
+    <a href="https://github.com/eduardo98m/GiaDog">View Demo</a>
     ·
-    <a href="https://github.com/eduardo98m/open-blacky/issues">Report Bug</a>
+    <a href="https://github.com/eduardo98m/GiaDog/issues">Report Bug</a>
   </p>
 </div>
 
@@ -85,7 +85,7 @@
 1. Build the docker image.
 
 ```bash
-docker build . -t open-blacky
+docker build . -t GiaDog
 ```
 
 2. Run the container of said image. It is necessary to allow the container to connect
@@ -105,8 +105,8 @@ sudo docker run \
     -e J2D_D3D=false \
     -it \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -v $PWD/src:/usr/src/open_blacky/src/spot_mini_ros \
-    open-blacky
+    -v $PWD/src:/usr/src/GiaDog/src/spot_mini_ros \
+    GiaDog
 ```
 
 3. Once inside the container, build the ROS package
@@ -115,7 +115,7 @@ sudo docker run \
 source /opt/ros/melodic/setup.bash 
 catkin_make_isolated
 echo -e "\nsource /opt/ros/melodic/setup.bash" >> ~/.bashrc
-echo -e "source ${OPEN_BLACKY_DIR}/devel_isolated/setup.bash" >> ~/.bashrc
+echo -e "source ${GIADOG_DIR}/devel_isolated/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -215,20 +215,20 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 * Amin Arriaga - aminlorenzo.14@gmail.com
 * Eduardo López - eduardo98m@gmail.com
 
-Project Link: [https://github.com/eduardo98m/open-blacky](https://github.com/eduardo98m/open-blacky)
+Project Link: [https://github.com/eduardo98m/GiaDog](https://github.com/eduardo98m/GiaDog)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-https://github.com/eduardo98m/open-blacky
+https://github.com/eduardo98m/GiaDog
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/eduardo98m/open-blacky.svg?style=for-the-badge
-[contributors-url]: https://github.com/eduardo98m/open-blacky/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/eduardo98m/open-blacky.svg?style=for-the-badge
-[forks-url]: https://github.com/eduardo98m/open-blackye/network/members
-[stars-shield]: https://img.shields.io/github/stars/eduardo98m/open-blacky.svg?style=for-the-badge
-[stars-url]: https://github.com/eduardo98m/open-blacky/stargazers
-[issues-shield]: https://img.shields.io/github/issues/eduardo98m/open-blacky.svg?style=for-the-badge
-[issues-url]: https://github.com/eduardo98m/open-blackye/issues
-[license-shield]: https://img.shields.io/github/license/eduardo98m/open-blacky.svg?style=for-the-badge
-[license-url]: https://github.com/eduardo98m/open-blackye/blob/master/LICENSE.txt
+[contributors-shield]: https://img.shields.io/github/contributors/eduardo98m/GiaDog.svg?style=for-the-badge
+[contributors-url]: https://github.com/eduardo98m/GiaDog/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/eduardo98m/GiaDog.svg?style=for-the-badge
+[forks-url]: https://github.com/eduardo98m/GiaDog/network/members
+[stars-shield]: https://img.shields.io/github/stars/eduardo98m/GiaDog.svg?style=for-the-badge
+[stars-url]: https://github.com/eduardo98m/GiaDog/stargazers
+[issues-shield]: https://img.shields.io/github/issues/eduardo98m/GiaDog.svg?style=for-the-badge
+[issues-url]: https://github.com/eduardo98m/GiaDog/issues
+[license-shield]: https://img.shields.io/github/license/eduardo98m/GiaDog.svg?style=for-the-badge
+[license-url]: https://github.com/eduardo98m/GiaDog/blob/master/LICENSE.txt
