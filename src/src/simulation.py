@@ -91,6 +91,8 @@ class simulation:
         # Note : The last column is ignored because numpy adds a column of nans while 
         # reading the file
         self.terrain_array = np.genfromtxt(self.terrain_file,  delimiter=",")[:, :-1]
+        center_x, center_y = self.terrain_array.shape
+        self.center = (center_x // 2, center_y // 2)
 
         # Robot joint ids
         self.actuated_joints_ids = actuated_joints_ids
@@ -240,6 +242,10 @@ class simulation:
         self.p.resetBasePositionAndOrientation(self.terrain, [0,0,0], [0,0,0,1])
         self.p.setGravity(*self.gravity_vector)
 
+        # Get difference between terrain array and real terrain
+        ray_info = self.p.rayTest((0, 0, -50),(0, 0, 50))[0]
+        self.z_diff = self.terrain_array[self.center[0]][self.center[1]] - ray_info[3][-1]
+
         # Obtain the maximum height around the starting point
         z_o = -50.0
         x = x_o - 0.2
@@ -304,10 +310,13 @@ class simulation:
                 The terrain height at that x, y point.
                 If the rays does not intecept the terrain it returns np.NaN
         """
-        ray_info = self.p.rayTest((x, y, z_min),(x, y, z_max))[0]
-        if ray_info[0] == self.terrain: return ray_info[3][-1]
-    
-        return np.NaN
+        x = int(x / self.mesh_scale[0]) + self.center[0]
+        y = int(y / self.mesh_scale[1]) + self.center[1]
+
+        rows, cols = self.terrain_array.shape
+        if x < 0 or x >= rows or y < 0 or y >= cols: return np.NaN
+
+        return self.terrain_array[x][y] - self.z_diff 
 
     def update_historic_data(self):
         """ 
@@ -539,7 +548,7 @@ class simulation:
         t = 0
         while True: 
             self.p.stepSimulation()
-            self.update_sensor_output()
+            self.update_height_scan()
             time.sleep(1/240)
             t = t+1
             if t % 120 == 0: self.draw_height_field_lines()
@@ -549,7 +558,7 @@ if __name__ == '__main__':
     terrain_file = "../test_terrains/maincra.txt" 
 
     sim = simulation(terrain_file, spot_urdf_file, p)
-    sim.initialize() 
+    sim.initialize(gui=True) 
 
     sim.test_sensors()
 

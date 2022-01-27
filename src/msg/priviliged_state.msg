@@ -1,19 +1,3 @@
-# Values that can be obtained from the simulator for agent training
-
-# Velocities
-float32[] linear_vel
-float32[] angular_vel
-
-# Contact states
-bool[] toes_contact
-bool[] thighs_contact
-bool[] shanks_contact
-
-# Joints states
-float32[] joint_angles
-float32[] joint_velocities
-
-# =========== Privileged Data =========== #
 float32[] joint_torques
 
 # Normal at each toe

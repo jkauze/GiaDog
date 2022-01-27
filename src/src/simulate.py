@@ -19,7 +19,7 @@ import rospy
 import pybullet as p
 from simulation import simulation
 from terrain_gen import terrain_gen
-from spot_mini_ros.msg import spot_state, joint_angles
+from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data
 
 # Rate messages for second
 RATE   = 10
@@ -126,20 +126,21 @@ def update_joints_sensors(sim: simulation, steps_per_second: int):
         sim.update_joints_sensors()
         rate.sleep()
 
-def spot_state_publisher(sim: simulation):
+def normal_data_publisher(sim: simulation):
     """
-        Function in charge of publishing through a ROS topic the data from simulation.
+        Function in charge of publishing through a ROS topic the normal data from
+        simulation.
     """
     try:
         # Init node
-        pub = rospy.Publisher('spot_state', spot_state, queue_size=RATE)
+        pub = rospy.Publisher('normal_data', normal_data, queue_size=RATE)
 
         # Run until manually stopped
-        print('[i] Topic "spot_state" is running!')
+        print('[i] Topic "normal_data" is running!')
         rate = rospy.Rate(RATE) 
         while not rospy.is_shutdown():
             # Create message
-            msg = spot_state()
+            msg = normal_data()
 
             # Velocities
             msg.linear_vel       = list(sim.base_linear_velocity)
@@ -154,7 +155,29 @@ def spot_state_publisher(sim: simulation):
             msg.joint_angles     = list(sim.joint_angles)
             msg.joint_velocities = list(sim.joint_velocities)
 
-            # ===================== Privileged Data ===================== #
+            # Publish
+            pub.publish(msg)
+            rate.sleep()
+
+    except rospy.ROSInterruptException:
+        print('[w] Topic "normal_data" was stopped.')
+
+def priviliged_data_publisher(sim: simulation):
+    """
+        Function in charge of publishing through a ROS topic the priviliged data from 
+        simulation.
+    """
+    try:
+        # Init node
+        pub = rospy.Publisher('priviliged_data', priviliged_data, queue_size=RATE)
+
+        # Run until manually stopped
+        print('[i] Topic "priviliged_data" is running!')
+        rate = rospy.Rate(RATE) 
+        while not rospy.is_shutdown():
+            # Create message
+            msg = priviliged_data()
+
             msg.joint_torques    = list(sim.joint_torques)
 
             # Normal at each toe
@@ -181,11 +204,11 @@ def spot_state_publisher(sim: simulation):
             rate.sleep()
 
     except rospy.ROSInterruptException:
-        print('[w] Topic "spot_state" was stopped.')
+        print('[w] Topic "priviliged_data" was stopped.')
 
 def joint_angles_setter(sim: simulation):
     try:
-        def actuate_joints(data, sim: simulation=sim):
+        def actuate_joints(data: joint_angles, sim: simulation=sim):
             """
                 Moves the robot's joints to a target position determined by a message 
                 received through a ROS topic
@@ -202,10 +225,6 @@ def joint_angles_setter(sim: simulation):
 
 def usage():
     script = '\033[1mrosrun spot_mini_ros simulate.py\033[0m'
-    opt = '[-g] [-u|--spot-urdf \033[4mURDF_FILE\033[0m] ' +\
-        '[--steps-per-second \033[4mSTEPS\033[0m] ' +\
-        '[--seconds-per-step \033[4mSECONDS\033[0m] ' +\
-        '[-s|--seed \033[3mSEED\033[0m]'
     print(
         'Usage:\n' +\
         f'    {script} [OPTIONS] \033[4mTERRAIN_TYPE\033[0m \033[4mTERRAIN_ARGS\033[0m\n' +\
@@ -219,7 +238,7 @@ def usage():
             'Simulation steps per real second. STEPS must bu integer.\n' +\
         '    \033[1m--seconds-per-step\033[0m \033[4mSECONDS\033[0m   ' +\
             'Simulation seconds for step. SECONDS must be floating.\n' +\
-        '   \033[1m-s\033[0m|\033[1m--seed\033[0m \033[3mSEED\033[0m    ' +\
+        '    \033[1m-s\033[0m|\033[1m--seed\033[0m \033[3mSEED\033[0m    ' +\
             'Specific seed you want to build terrains.'
     )
 
@@ -321,11 +340,12 @@ if __name__ == '__main__':
     sim.initialize(X_INIT, Y_INIT, gui) 
 
     # Run rosnode for spot-mini
-    rospy.init_node('spot_state_node', anonymous=True)
+    rospy.init_node('spot_simulation', anonymous=True)
 
     # Thread that runs the simulation
     args = (sim, steps_per_second, seconds_per_step)
     sim_th = Thread(target=run_simulation, args=args)
+    sim_th.daemon = True
     sim_th.start()
 
     # Threads that constantly update each sensor
@@ -338,12 +358,19 @@ if __name__ == '__main__':
     sensores_ths.append(Thread(target=update_height_scan, args=args))
     sensores_ths.append(Thread(target=update_toes_force, args=args))
     sensores_ths.append(Thread(target=update_joints_sensors, args=args))
-    for th in sensores_ths: th.start()
+    for th in sensores_ths: 
+        th.daemon = True
+        th.start()
 
     # Thread that publish the value of each sensor in ROS.
     pub_th = Thread(target=spot_state_publisher, args=(sim,))
+    pub_th.daemon = True
     pub_th.start()
 
     # Thread that receives data through ROS to update the joints.
     joint_th = Thread(target=joint_angles_setter, args=(sim,))
+    joint_th.daemon = True
     joint_th.start()
+
+    # The node keeps runing until the process is canceled
+    rospy.spin()

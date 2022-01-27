@@ -46,7 +46,8 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   joint_angles.msg
-  spot_state.msg
+  normal_data.msg 
+  priviliged_data.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
@@ -83,5 +84,6 @@ catkin_package(
 ## in contrast to setup.py, you can choose the destination
 install(PROGRAMS
   src/simulate.py
+  src/spot_interface.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
