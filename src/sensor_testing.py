@@ -8,7 +8,7 @@
 
 import pybullet as p
 import pybullet_data as pd
-from bullet_dataclasses import Joint, JointState, sensors_state, ContactInfo, LinkState
+from src.bullet_dataclasses import *
 import time
 import numpy as np
 

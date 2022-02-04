@@ -14,8 +14,8 @@ import message_filters
 from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data
 
 # Training
-from policy import *
-from controller import *
+from src.policy import *
+from src.controller import *
 
 
 class spot_interface:
@@ -82,7 +82,7 @@ class spot_interface:
 
 if __name__ == '__main__':
     # Create and initialize ROS node
-    spot_interface(lambda x : print(x))
+    spot_interface(lambda x, y : print(x, '\n', y))
     rospy.init_node('spot_interface', anonymous=True)
 
     # The node keeps runing until the process is canceled

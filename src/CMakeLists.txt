@@ -48,6 +48,7 @@ add_message_files(
   joint_angles.msg
   normal_data.msg 
   priviliged_data.msg
+  text.msg
 )
 
 ## Generate added messages and services with any dependencies listed here

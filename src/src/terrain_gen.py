@@ -214,7 +214,7 @@ class terrain_gen:
                 Roughness of the terrain. It should preferably be in the range [0, 0.05].
             frequency: float
                 How often the hills appear. It must be positive, preferably in the range 
-                [0.2, 1]
+                [0.2, 1].
             amplitude: float
                 Maximum height of the hills.
             seed: int 

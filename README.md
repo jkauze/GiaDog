@@ -85,7 +85,7 @@
 1. Build the docker image.
 
 ```bash
-docker build . -t GiaDog
+docker build . -t giadog
 ```
 
 2. Run the container of said image. It is necessary to allow the container to connect
@@ -106,7 +106,7 @@ sudo docker run \
     -it \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v $PWD/src:/usr/src/GiaDog/src/spot_mini_ros \
-    GiaDog
+    giadog
 ```
 
 3. Once inside the container, build the ROS package

@@ -11,8 +11,7 @@ from typing import *
 
 # Simulacion
 import pybullet as p
-import pybullet_data as pd
-from bullet_dataclasses import *
+from src.bullet_dataclasses import *
 
 # Array usage
 import numpy as np
@@ -21,7 +20,6 @@ class simulation:
     """ Control and monitor the simulation of the spot-mini in pybullet. """
     def __init__(
             self,
-            terrain_file: str, 
             giadog_urdf_file: str,
             bullet_server, #Basically the pybullet module
             mesh_scale: List[float]=[1/50, 1/50, 1],
@@ -29,13 +27,12 @@ class simulation:
             thighs_ids: List[int] = [8, 12, 17, 18],
             shanks_ids: List[int] = [9, 13, 18, 22],
             toes_ids: List[int]   = [10, 14, 19, 23],
-            gravity_vector: np.ndarray = np.array([0, 0, -9.807])
+            gravity_vector: np.ndarray = np.array([0, 0, -9.807]),
+            gui: bool=False
         ): 
         """
             Arguments:
             ----------
-                terrain_file: str
-                    Path to the .txt file representing the terrain.
                 giadog_urdf_file: str 
                     Path to the URDF file of the quadruped robot.
                 bullet_server: module 
@@ -81,18 +78,14 @@ class simulation:
                 gravity_vector: np.ndarray, shape (3,), optional
                     Simulation gravity vector.
                     Default: [0, 0, -9.807]
+                gui: bool, optional
+                    Indicates if the simulation GUI will be displayed.
+                    Default: False
         """
         self.giadog_urdf_file = giadog_urdf_file
         self.p = bullet_server
         self.mesh_scale = mesh_scale
-        self.terrain_file = terrain_file
-        
-        # This array is used to calculate the robot toes heightfields 
-        # Note : The last column is ignored because numpy adds a column of nans while 
-        # reading the file
-        self.terrain_array = np.genfromtxt(self.terrain_file,  delimiter=",")[:, :-1]
-        center_x, center_y = self.terrain_array.shape
-        self.center = (center_x // 2, center_y // 2)
+        self.gravity_vector = gravity_vector
 
         # Robot joint ids
         self.actuated_joints_ids = actuated_joints_ids
@@ -100,19 +93,24 @@ class simulation:
         self.shanks_ids = shanks_ids
         self.toes_ids = toes_ids
         
+        self.p.connect(self.p.GUI if gui else self.p.DIRECT)
+
+    def __reset_state(self):
+        """
+            Reset bot state.
+        """
         # State data // Sensor data
-        self.desired_direction = np.zeros([2])
+        self.desired_direction         = np.zeros([2])
         self.desired_turning_direction = np.zeros([1])
-        self.gravity_vector = gravity_vector
-        self.base_linear_velocity = np.zeros([3])
-        self.base_angular_velocity = np.zeros([3])
-        self.joint_angles = np.zeros([12]) 
-        self.joint_velocities = np.zeros([12])
+        self.base_linear_velocity      = np.zeros([3])
+        self.base_angular_velocity     = np.zeros([3])
+        self.joint_angles              = np.zeros([12]) 
+        self.joint_velocities          = np.zeros([12])
 
         # FTG (These may be provided by the C++ controller module)
         self.ftg_phases_sin_cos = np.zeros([4,2])
-        self.ftg_frequencies = np.zeros([4])
-        self.base_frequency = np.zeros([1])
+        self.ftg_frequencies    = np.zeros([4])
+        self.base_frequency     = np.zeros([1])
 
         # Historic data
         self.joint_position_error_history = np.zeros([2, 12])
@@ -122,10 +120,12 @@ class simulation:
         # Priviledge data
         self.terrain_normal_at_each_toe = np.zeros([4, 3])
         self.normal_force_at_each_toe   = np.zeros([4]) # (Foot contact forces?¿)
-        self.toes_contact_states   = np.zeros([4])
-        self.thighs_contact_states = np.zeros([4])
-        self.shanks_contact_states = np.zeros([4])
-        self.height_scan_at_each_toe = np.zeros([4, 9])
+        self.toes_contact_states        = np.zeros([4])
+        self.thighs_contact_states      = np.zeros([4])
+        self.shanks_contact_states      = np.zeros([4])
+        self.height_scan_at_each_toe    = np.zeros([4, 9])
+        self.contact_force_at_each_toe  = np.zeros([4])
+        self.foot_ground_friction_coefficients = np.zeros([4])
 
         # For debug:
         self.height_scan_lines = np.zeros([4,9,2, 3])
@@ -137,8 +137,13 @@ class simulation:
         # Extra sensor (This may be used in the future)
         self.toe_force_sensor = np.zeros(4) 
 
+
     @staticmethod
-    def _get_foot_height_scan_coordinates(x: float, y: float, alpha: float) -> np.ndarray:
+    def __get_foot_height_scan_coordinates(
+            x: float, 
+            y: float,
+            alpha: float
+        ) -> np.ndarray:
         """
             Given a robot toe position and orientation, returns the positions of the toe 
             height sensor corrdinates.
@@ -169,7 +174,7 @@ class simulation:
         return P
 
     @staticmethod
-    def _contact_info_average(
+    def __contact_info_average(
             contact_points_info: List[ContactInfo]
             ) -> Tuple[float, float, np.ndarray]: 
         """
@@ -211,26 +216,21 @@ class simulation:
 
         return (contact_force_mag, fricction_coefficient, contact_force)
 
-    def initialize(self, x_o: float=0.0, y_o: float=0.0, gui: bool=False):
+    def __initialize(self, x_o: float=0.0, y_o: float=0.0):
         """
             Initializes a pybullet simulation, setting up the terrain, gravity and the 
-            quadruped in the pybullet enviroment. (And enabiling the torque sensors in the 
-            quadruped foots/toes)
+            quadruped in the pybullet enviroment. (And enabiling the torque sensors in 
+            the quadruped foots/toes)
 
             Arguments:
             ----------
-            x: float, optional
-                x coordintate of the robot initial position (In the world frame).
-                Default: 0.0
-            y: float, optional
-                y coordintate of the robot initial position (In the world frame).
-                Default: 0.0
-            gui: bool, optional
-                Indicates if the simulation GUI will be displayed.
-                Default: False
+                x_o: float, optional
+                    x coordintate of the robot initial position (In the world frame).
+                    Default: 0.0
+                y_o: float, optional
+                    y coordintate of the robot initial position (In the world frame).
+                    Default: 0.0
         """
-        self.p.connect(self.p.GUI if gui else self.p.DIRECT)
-
         # Create terrain object
         terrain_shape = self.p.createCollisionShape(
             shapeType = self.p.GEOM_HEIGHTFIELD, 
@@ -257,7 +257,7 @@ class simulation:
             x += 0.05
 
         # Load mini-spot from URDF file.
-        print(f'[i] Initial position: ({x_o}, {y_o}, {z_o})')
+        print(f'\033[1;36m[i]\033[0m Initial position: ({x_o}, {y_o}, {z_o})')
         self.quadruped = self.p.loadURDF(
             self.giadog_urdf_file, 
             [x_o, y_o, z_o + 0.3],
@@ -273,21 +273,40 @@ class simulation:
                 enableSensor = True,
             )
 
-    def get_terrain_height(
-            self,
-            x: float,
-            y: float,
-            z_min: float=-50.0,
-            z_max: float=50.0
-        ) -> float:
+    def reset(self, terrain_file: str, x_o: float=0.0, y_o: float=0.0):
+        """
+            Reset simulation.
+
+            Arguments:
+            ----------
+                terrain_file: str, optional
+                    Path to the .txt file representing the terrain. If None, then 
+                x_o: float, optional
+                    x coordintate of the robot initial position (In the world frame).
+                    Default: 0.0
+                y_o: float, optional
+                    y coordintate of the robot initial position (In the world frame).
+                    Default: 0.0
+        """
+        self.terrain_file = terrain_file
+        
+        # This array is used to calculate the robot toes heightfields 
+        # Note : The last column is ignored because numpy adds a column of nans while 
+        # reading the file
+        self.terrain_array = np.genfromtxt(self.terrain_file,  delimiter=",")[:, :-1]
+        center_x, center_y = self.terrain_array.shape
+        self.center = (center_x // 2, center_y // 2)
+
+        self.p.resetSimulation()
+
+        self.__reset_state()
+        self.__initialize(x_o, y_o)
+
+    def get_terrain_height(self, x: float, y: float) -> float:
         """
             Returns the height of the terrain at x,y coordinates (in cartesian world 
-            coordiantes). It needs a position z_o from where to shot a ray that will 
-            intersect the terrain. The ray is casted from z_min and z_max to and from the
-            z_o, to augment the probabilities of intersection with the terrain, this is
-            to avoid  having a ray casted to the robot body. 
-            
-            This function assumes the terrain has no bridge 'like' structures.
+            coordiantes). This function assumes the terrain has no bridge 'like' 
+            structures.
 
             Arguments:
             ----------
@@ -295,20 +314,12 @@ class simulation:
                 x position in cartesian global coordinates.
             y: float
                 y position in cartesian global coordinates.
-            z_min: float, optional 
-                Minimum height where the ray is gonna be casted.  
-                Should be below the min terrain height.
-                Default: -50.0
-            z_max: float, optional
-                Top height where the ray is gonna be casted.
-                Should be above the min terrain height.
-                Default: 50.0
             
             Return:
             -------
             float 
                 The terrain height at that x, y point.
-                If the rays does not intecept the terrain it returns np.NaN
+                numpy.NaN if if the coordinates go off the map
         """
         x = int(x / self.mesh_scale[0]) + self.center[0]
         y = int(y / self.mesh_scale[1]) + self.center[1]
@@ -367,7 +378,7 @@ class simulation:
                 self.foot_ground_friction_coefficients[i] = 0 
                 self.toes_contact_states[i] = 0
             else:
-                contact_force, fricction_coefficient, normal = self._contact_info_average(
+                contact_force, fricction_coefficient, normal = self.__contact_info_average(
                     [ContactInfo(*elem) for elem in  (toe_contact_info)]
                 )
                 self.terrain_normal_at_each_toe[i] = normal
@@ -418,8 +429,8 @@ class simulation:
             # Height scan around each foot 
             roll, pitch, yaw = self.p.getEulerFromQuaternion(toe_orientation)
             x,y,z =  toe_position 
-            P = self._get_foot_height_scan_coordinates(x,y,yaw) 
-            z_terrain = [self.get_terrain_height(x_p,y_p,z) for (x_p,y_p) in P]
+            P = self.__get_foot_height_scan_coordinates(x,y,yaw) 
+            z_terrain = [self.get_terrain_height(x_p,y_p) for (x_p,y_p) in P]
             self.height_scan_lines[i] = np.array([ 
                 [[x, y, z], [x_p, y_p, z_t]] for (x_p, y_p), z_t in zip(P, z_terrain)]
             )
@@ -578,7 +589,6 @@ class simulation:
                                             lateralFriction = friction)
                 print('friction = ', friction)
                 friction = (friction==0.4)*0.9 + (friction==0.9)*0.1 + (friction==0.1)*0.4 
-
 
     def set_toes_friction_coefficients(self, friction_coefficient):
         """

@@ -23,7 +23,7 @@ class controller:
             f_i: float,
             h: float=0.2,
             f_0 : float=1.25
-            ) -> np.ndarray:
+        ) -> np.ndarray:
         """
             Generates a vector in R^3 representing the desired foot position (end efector)
             in the H_i frame corresponding to the robots i-th leg horizontal frame below 
