@@ -50,7 +50,10 @@ class controller:
         """
         
         h_2 = np.sqrt(z ** 2 + y ** 2)
-        r_o = np.sqrt(h_2 ** 2 - cls.HOR_OFFSET ** 2) - cls.VER_OFFSET
+        sqrt_component = h_2 ** 2 - cls.HOR_OFFSET ** 2
+        if sqrt_component < 0:
+            sqrt_component = 0
+        r_o = np.sqrt(sqrt_component) - cls.VER_OFFSET
 
         D = (r_o**2 + x**2 - cls.SHANK_JOINT_LEN**2 -cls.THIGH_JOINT_LEN**2)/\
             (2*cls.SHANK_JOINT_LEN*cls.THIGH_JOINT_LEN)
@@ -127,16 +130,25 @@ class controller:
         sqrt_component = y**2 + z**2 - cls.HOR_OFFSET**2
         
         if sqrt_component < 0.0:
-            print("NEGATIVE SQRT")
+            #print("NEGATIVE SQRT")
             sqrt_component = 0.0
+
         r_o = np.sqrt(sqrt_component) - cls.VER_OFFSET
+
+        second_sqrt_component = r_o**2+x**2 - \
+                                (cls.SHANK_JOINT_LEN * np.sin(wrist_angle))**2
+        if  second_sqrt_component < 0.0:
+            print("NEGATIVE SQRT")
+            q_o = 0.0
+        else:
+            q_o = np.sqrt(second_sqrt_component)
 
         shoulder_angle = -np.arctan2(z, y) - np.arctan2(
             r_o, -cls.HOR_OFFSET)
         
         elbow_angle = np.arctan2(-x, r_o) -\
             np.arctan2(cls.SHANK_JOINT_LEN * np.sin(wrist_angle),
-            np.sqrt(r_o**2+x**2 - (cls.SHANK_JOINT_LEN * np.sin(wrist_angle))**2)
+            q_o
             )
             
         
@@ -169,12 +181,20 @@ class controller:
         
         r_o = np.sqrt(sqrt_component) - cls.VER_OFFSET
 
+        second_sqrt_component = r_o**2+x**2 - \
+                                (cls.SHANK_JOINT_LEN * np.sin(wrist_angle))**2
+        if  second_sqrt_component < 0.0:
+            print("NEGATIVE SQRT")
+            q_o = 0.0
+        else:
+            q_o = np.sqrt(second_sqrt_component)
+
         shoulder_angle = -np.arctan2(z, y) - np.arctan2(r_o, 
                                                         cls.HOR_OFFSET)
         
         elbow_angle = np.arctan2(-x, r_o) -\
             np.arctan2(cls.SHANK_JOINT_LEN * np.sin(wrist_angle),
-            np.sqrt(r_o**2+x**2 - (cls.SHANK_JOINT_LEN * np.sin(wrist_angle))**2)
+            q_o
             )
         
         joint_angles = np.array([-shoulder_angle, elbow_angle, wrist_angle])
@@ -187,9 +207,9 @@ class controller:
             sigma_i_0: float, 
             t: float, 
             f_i: float,
-            h: float = 0.067, # 0.2 is the parameter used by the ETH-Zurich paper
-            f_0 : float=1.25
-            ) -> Tuple(np.ndarray, float):
+            h: float = 0.067, # 0.2 is the parameter used in the ETH-Zurich paper 
+            f_0 : float= 24 #1.25 is the parameter used in the ETH-Zurich paper
+            ) :
         """
         Generates a vector in R^3 representing the desired foot position (end 
         efector) in the H_i frame corresponding to the robots i-th leg 
@@ -240,14 +260,15 @@ class controller:
         sigma_i = (sigma_i_0 + t * (f_0 + f_i)) % (2 * np.pi)
         k = 2 * (sigma_i - np.pi) / np.pi
         
+        param = 0 # 0.5
         if 0 < k < 1: 
-            return (h * (-2 * k ** 3 + 3 * k ** 2) - 0.5) * Hi_z, sigma_i
+            return (h * (-2 * k ** 3 + 3 * k ** 2) - param) * Hi_z, sigma_i
         elif 1 < k < 2: 
-            return (h * (2 * k ** 3 - 9 * k ** 2 + 12 * k - 4) - 0.5) * Hi_z, sigma_i
+            return (h * (2 * k ** 3 - 9 * k ** 2 + 12 * k - 4) - param) * Hi_z, sigma_i
         else: 
-            return - 0.5 * Hi_z, sigma_i
+            return - param * Hi_z, sigma_i
     
-
+    @classmethod    
     def apply_FTG(cls, theta, t):
         """
         Processes the NN output theta and outputs the desired foot position in 
@@ -274,7 +295,7 @@ class controller:
         
         """
         
-        target_foot_psoitions = np.zeros([4,3])
+        target_foot_positions = np.zeros([4,3])
         FTG_frequencies = np.zeros([4])
         FTG_phases = np.zeros([4,2])
         
@@ -290,10 +311,11 @@ class controller:
 
             FTG_frequencies[i] = sigma_i
             FTG_phases[i] = [np.sin(sigma_i), np.cos(sigma_i)]
-            target_foot_psoitions[i] = r + xyz_residual
+            target_foot_positions[i] = r + xyz_residual
         
-        return target_foot_psoitions, FTG_frequencies, FTG_phases
+        return target_foot_positions, FTG_frequencies, FTG_phases
     
+    @classmethod
     def apply_IK(cls, T, r, leg_type = "RIGHT"):
         """
         Applies the Inverse Kinematics algorithm given a position r in the 
@@ -315,7 +337,7 @@ class controller:
         """
         r_hip = T @ np.array([*r, 1]).T
         
-        joint_angles = cls.solve_leg_IK(cls, leg_type, r_hip)
+        joint_angles = cls.solve_leg_IK(leg_type, r_hip[0:3])
         
         return joint_angles
         
