@@ -8,6 +8,8 @@
 # Utilities
 import numpy as np
 from typing import *
+from random import randint
+from src.controller import *
 
 # OpenIA Gym
 import gym
@@ -16,6 +18,7 @@ from gym import spaces
 # Simulation
 import rospy
 import message_filters
+from src.terrain_gen import *
 from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data, text
 
 class teacher_giadog_env(gym.Env):
@@ -51,8 +54,13 @@ class teacher_giadog_env(gym.Env):
             (TODO)
     """
     QUEUE_SIZE = 10
+    VEL_TH   = 0.6 # Velocity threshold
+    SWIGN_PH = 0   # Swign phase
+    TERRAIN_FILE = 'gym_terrain.txt'
     # ROS publisher node that update the spot mini joints
     reset_pub = rospy.Publisher('reset_pub', text, QUEUE_SIZE)
+    # ROS publisher node that update the spot mini joints
+    joints_pub = rospy.Publisher('spot_joints', joint_angles, QUEUE_SIZE)
 
     def __init__(self):
         self.observation_space = spaces.Dict({
@@ -109,19 +117,260 @@ class teacher_giadog_env(gym.Env):
             )
         })
         self.action_space = spaces.Box(
-            low = -2 * np.pi * np.ones((4, 16)),
-            high = 2 * np.pi * np.ones((4, 16)),
+            low = -float('inf'),
+            high = float('inf'),
             dtype = np.float16
         )
+        self.gravity_vector = np.array([0, 0, -9.807])
 
-    def step(self, action: np.ndarray):
-        pass
+        normal_data_sub = message_filters.Subscriber(
+            'get_normal_data', 
+            normal_data
+        )
+        priviliged_data_sub = message_filters.Subscriber(
+            'get_priviliged_data', 
+            priviliged_data
+        )
+        ts = message_filters.TimeSynchronizer(
+            [normal_data_sub, priviliged_data_sub], 
+            self.QUEUE_SIZE
+        )
+        ts.registerCallback(self.__update_obs)
+    
+    def __actuate_joints(cls, joint_target_positions: List[float]):
+        """
+            Moves the robot joints to a given target position.
+
+            Argument:
+            ---------
+                joint_target_positions: List[float], shape (12,)
+                    Quadruped joints desired angles. 
+                    The order is the same as for the robot actuated_joints_ids.
+                    The order should be as follows:
+                        'motor_front_left_hip' 
+                        'motor_front_left_upper_leg'// "Front left thigh"
+                        'motor_front_left_lower_leg'// "Front left shank"
+
+                        'motor_front_right_hip' 
+                        'motor_front_right_upper_leg'// "Front right thigh"
+                        'motor_front_right_lower_leg'// "Front right shank"
+
+                        'motor_back_left_hip' 
+                        'motor_back_left_upper_leg'// "Back left thigh"
+                        'motor_back_left_lower_leg'// "Back left shank"
+
+                        'motor_back_right_hip' 
+                        'motor_back_right_upper_leg'// "Back right thigh"
+                        'motor_back_right_lower_leg'// "Back right shank"
+        """
+        # Create message
+        msg = joint_angles()
+        msg.joint_target_positions = joint_target_positions
+        cls.joints_pub.publish(msg)
+
+    def __get_reward(
+            self,
+            ftg_freqs: List[float],
+            foot_target_hist: List[List[np.ndarray]],
+        ) -> float:
+        """
+            Reward function.
+
+            Arguments:
+            ----------
+                ftg_freqs: List[float], len 4
+                    FTG frequencies.
+                foot_target_hist: np.ndarray, shape (3, 4, 3)
+                    Foot target history at times t, t-1 and t-2.
+
+            Return:
+            -------
+                float 
+                    Reward value.
+
+            References:
+            -----------
+                * 	Learning Quadrupedal Locomotion over Challenging Terrain (Oct,2020).
+                    (p.8 Motion synthesis and p.15 S3 Foot trajectory generator).
+                    https://arxiv.org/pdf/2010.11251.pdf
+        """
+        # Zero command
+        zero = not (self.target_dir[0] or self.target_dir[1])
+
+        linear_vel = np.ndarray([self.linear_vel[0], self.linear_vel[1]])
+        # Base horizontal linear velocity projected onto the command direction.
+        proj_linear_vel = np.dot(linear_vel, self.target_dir)
+        # Velocity orthogonal to the target direction.
+        ort_vel = (linear_vel - proj_linear_vel * self.target_dir) \
+            if zero else linear_vel
+        ort_vel = np.linalg.norm(ort_vel)
+
+        # Base horizontal angular velocity.
+        h_angular_vel = np.ndarray([self.angular_vel[0], self.angular_vel[1]])
+        # Base angular velocity Z projected onto desired angular velocity.
+        proj_angular_vel = self.angular_vel[2] * self.turn_dir
+
+        # Set of such collision-free feet and index set of swing legs
+        count_swing = 0
+        foot_clear = 4
+        for i in range(4):
+            # If i-th foot is in swign phase.
+            if ftg_freqs[i] >= self.SWIGN_PH:
+                count_swing += 1
+
+                # Verify that the height of the i-th foot is greater than the height of 
+                # the surrounding terrain
+                for height in self.height_scan:
+                    if foot_target_hist[0][i][2] <= height:
+                        foot_clear -= 1
+                        break
+
+        # ======================= REWARDS ======================= #
+        # Linear Velocity Reward
+        if zero:
+            r_lv = 0
+        elif proj_linear_vel < self.VEL_TH:
+            r_lv = np.exp(-2 * (proj_linear_vel - self.VEL_TH) ** 2)
+        else:
+            r_lv = 1
+
+        # Angular Velocity Reward
+        r_av = 0
+        if self.turn_dir == 0:
+            r_av = 0
+        elif proj_angular_vel < self.VEL_TH:
+            r_av = np.exp(-1.5 * (proj_angular_vel - self.VEL_TH) ** 2)
+        else:
+            r_av = 1
+
+        # Base Motion Reward
+        w_2 = np.dot(h_angular_vel, h_angular_vel)
+        r_b = np.exp(-1.5 * ort_vel ** 2) + np.exp(-1.5 * w_2)
+
+        # Foot Clearance Reward
+        r_fc = foot_clear / count_swing if count_swing > 0 else 1
+
+        # Body Collision Reward
+        r_bc = -sum(self.thighs_contact) - sum(self.shanks_contact)
+
+        # Target Smoothness Reward
+        r_fd_T = []
+        for i in range(3):
+            r_fd_T.append(np.ndarray([
+                foot_target_hist[i][0][0], foot_target_hist[i][0][1], 
+                foot_target_hist[i][0][2], foot_target_hist[i][1][0], 
+                foot_target_hist[i][1][1], foot_target_hist[i][1][2],
+                foot_target_hist[i][2][0], foot_target_hist[i][2][1], 
+                foot_target_hist[i][2][2], foot_target_hist[i][3][0], 
+                foot_target_hist[i][3][1], foot_target_hist[i][3][2]
+            ]))
+        r_s = -np.linalg.norm(r_fd_T[0] - 2.0 * r_fd_T[1] + r_fd_T[2])
+
+        # Torque Reward
+        r_tau = 0
+        for pos in self.joint_angles: r_tau -= abs(pos)
+
+        return (5*r_lv + 5*r_av + 4*r_b + r_fc + 2*r_bc + 2.5*r_s) / 100.0 + 2e-5 * r_tau
+
+    def __update_obs(self, n_data: normal_data, p_data: priviliged_data):
+        """
+            Update data from ROS
+        """
+        # Non-priviliged data
+        self.linear_vel         = n_data.linear_vel 
+        self.angular_vel        = n_data.angular_vel 
+        self.toes_contact       = n_data.toes_contact 
+        self.thighs_contact     = n_data.thighs_contact 
+        self.shanks_contact     = n_data.shanks_contact 
+        self.joint_angles       = n_data.joint_angles 
+        self.joint_velocities   = n_data.joint_velocities  
+        self.transform_matrices = [
+            n_data.transform_matrix0,
+            n_data.transform_matrix1,
+            n_data.transform_matrix2,
+            n_data.transform_matrix3
+        ]
+
+        # Priviliged data
+        self.joint_torques   = p_data.joint_torques 
+        self.normal_toe = [
+            p_data.normal_toe_fl, 
+            p_data.normal_toe_fr, 
+            p_data.normal_toe_bl, 
+            p_data.normal_toe_br
+        ]
+        self.toes_force1     = p_data.toes_force1     
+        self.toes_force2     = p_data.toes_force2     
+        self.ground_friction = p_data.ground_friction 
+        self.height_scan = [
+            p_data.height_scan_fl,
+            p_data.height_scan_fr,
+            p_data.height_scan_bl,
+            p_data.height_scan_br
+        ]
+
+    def __get_obs(self): 
+        return {
+            # Non-priviliged Space
+            'gravity_vector': self.gravity_vector,
+            'angular_vel'   : self.angular_vel,
+            'linear_vel'    : self.linear_vel,
+            'joint_angles'  : self.joint_angles,
+            'joint_vels'    : self.joint_velocities,
+            'toes_contact'  : self.toes_contact,
+            'thighs_contact': self.thighs_contact,
+            'shanks_contact': self.shanks_contact,
+
+            # Priviliged Space
+            'normal_foot'  : self.normal_toe, 
+            'height_scan'  : self.height_scan, 
+            'foot_forces'  : self.toes_force1, 
+            'foot_friction': self.ground_friction
+        }
+
+    def step(self, action: np.ndarray) -> Tuple[dict, float, bool, dict]:
+        target_foot_positions, _, _ = controller.apply_FTG(action, self.timestep)
+        joints_angles = []
+        
+        for i in range(4):
+            r = target_foot_positions[i]
+            T_i = self.transform_matrices[i]
+            leg_angles = controller.apply_IK(
+                T_i, 
+                r, 
+                leg_type= ("LEFT" if i%2 == 0 else "RIGHT") 
+            )
+            joints_angles += list(leg_angles)
+
+        self.__actuate_joints(joint_angles)
+
+        observation = self.__get_obs()
+        reward = self.__get_reward()
+        done = False # TODO
+        info = {}    # TODO
+
+        return observation, reward, done, info
+
+    def make_terrain(self, type: str, *args, **kwargs):
+        # We create the terrain
+        if type == 'hills': terrain = terrain_gen.hills(*args, **kwargs)
+        elif type == 'steps': terrain = terrain_gen.steps(*args, **kwargs)
+        elif type == 'stairs': terrain = terrain_gen.stairs(*args, **kwargs)
+
+        # A random goal is selected
+        x, y = terrain_gen.set_goal(terrain, 3)
+        self.target_dir = [x / 50 - 5, y / 50 - 5]
+        self.turn_dir = randint(-1, 1)
+
+        # We store the terrain in a file
+        terrain_gen.save(terrain, self.TERRAIN_FILE)
 
     def reset(self, terrain_file: str=''):
+        """
+            Reset simulation.
+        """
         # Create message
         msg = text()
         msg.txt= terrain_file
         self.reset_pub.publish(msg)
 
-    def close(self):
-        pass

@@ -82,17 +82,23 @@ def normal_data_publisher(sim: simulation):
             msg = normal_data()
 
             # Velocities
-            msg.linear_vel       = list(sim.base_linear_velocity)
-            msg.angular_vel      = list(sim.base_angular_velocity)
+            msg.linear_vel        = list(sim.base_linear_velocity)
+            msg.angular_vel       = list(sim.base_angular_velocity)
 
             # Contact states
-            msg.toes_contact     = list(sim.toes_contact_states)
-            msg.thighs_contact   = list(sim.thighs_contact_states)
-            msg.shanks_contact   = list(sim.shanks_contact_states)
+            msg.toes_contact      = list(sim.toes_contact_states)
+            msg.thighs_contact    = list(sim.thighs_contact_states)
+            msg.shanks_contact    = list(sim.shanks_contact_states)
 
             # Joints states
-            msg.joint_angles     = list(sim.joint_angles)
-            msg.joint_velocities = list(sim.joint_velocities)
+            msg.joint_angles      = list(sim.joint_angles)
+            msg.joint_velocities  = list(sim.joint_velocities)
+
+            # Tranformation matrices
+            msg.transform_matrix0 = list(sim.transformation_matrices[0])
+            msg.transform_matrix1 = list(sim.transformation_matrices[1])
+            msg.transform_matrix2 = list(sim.transformation_matrices[2])
+            msg.transform_matrix3 = list(sim.transformation_matrices[3])
 
             # Publish
             pub.publish(msg)
@@ -354,6 +360,7 @@ if __name__ == '__main__':
         (sim.update_height_scan, 'heigh scan'),
         (sim.update_toes_force, 'toes force'),
         (sim.update_joints_sensors, 'joints'),
+        (sim.update_transformation_matrices, 'transformation matrices')
     }
 
     for f, data in update_functions:

@@ -16,10 +16,8 @@ from src.bullet_dataclasses import *
 # Array usage
 import numpy as np
 
-
 # Inverse kinematics testing
 from controller import controller
-
 
 
 class simulation:
@@ -89,6 +87,9 @@ class simulation:
                 gui: bool, optional
                     Indicates if the simulation GUI will be displayed.
                     Default: False
+                self_collision_enabled: bool, optional
+                    TODO
+                    Default: False
         """
         self.giadog_urdf_file = giadog_urdf_file
         self.p = bullet_server
@@ -107,6 +108,33 @@ class simulation:
         
         self.p.connect(self.p.GUI if gui else self.p.DIRECT)
 
+    def __get_terrain_height(self, x: float, y: float) -> float:
+        """
+            Returns the height of the terrain at x,y coordinates (in cartesian world 
+            coordiantes). This function assumes the terrain has no bridge 'like' 
+            structures.
+
+            Arguments:
+            ----------
+            x: float 
+                x position in cartesian global coordinates.
+            y: float
+                y position in cartesian global coordinates.
+            
+            Return:
+            -------
+            float 
+                The terrain height at that x, y point.
+                numpy.NaN if if the coordinates go off the map
+        """
+        x = int(x / self.mesh_scale[0]) + self.center[0]
+        y = int(y / self.mesh_scale[1]) + self.center[1]
+
+        rows, cols = self.terrain_array.shape
+        if x < 0 or x >= rows or y < 0 or y >= cols: return np.NaN
+
+        return self.terrain_array[x][y] - self.z_diff 
+
     def __reset_state(self):
         """
             Reset bot state.
@@ -123,11 +151,6 @@ class simulation:
         self.ftg_phases_sin_cos = np.zeros([4,2])
         self.ftg_frequencies    = np.zeros([4])
         self.base_frequency     = np.zeros([1])
-
-        # Historic data
-        self.joint_position_error_history = np.zeros([2, 12])
-        self.joint_velocity_history       = np.zeros([2, 12])
-        self.foot_target_history          = np.zeros([2, 4, 3])
         
         # Priviledge data
         self.terrain_normal_at_each_toe = np.zeros([4, 3])
@@ -149,6 +172,8 @@ class simulation:
         # Extra sensor (This may be used in the future)
         self.toe_force_sensor = np.zeros(4) 
 
+        # Transformation matrices from the hip to the leg base
+        self.transformation_matrices = np.zeros((4,4))
 
     @staticmethod
     def __get_foot_height_scan_coordinates(
@@ -162,17 +187,17 @@ class simulation:
 
             Arguments:
             ----------
-            x: float
-                x coordinate of the robot toe. [In the world frame]
-            y: float
-                y coordinate of the robot toe. [In the world frame]
-            alpha: float
-                Orientation of the toe.
+                x: float
+                    x coordinate of the robot toe. [In the world frame]
+                y: float
+                    y coordinate of the robot toe. [In the world frame]
+                alpha: float
+                    Orientation of the toe.
 
             Return:
             -------
-            numpy.ndarray, shape (9, 2)
-                Array with each of the toe height sensor coordinates.
+                numpy.ndarray, shape (9, 2)
+                    Array with each of the toe height sensor coordinates.
         """
         n = 9      # Number of points around each foot
         r = 0.07   # Radius of the height sensors around each toe.
@@ -242,6 +267,10 @@ class simulation:
                 y_o: float, optional
                     y coordintate of the robot initial position (In the world frame).
                     Default: 0.0
+                fix_robot_base: bool, optional
+                    [TODO]
+                    Default: False
+                
         """
         # Create terrain object
         terrain_shape = self.p.createCollisionShape(
@@ -264,7 +293,7 @@ class simulation:
         while x <= x_o + 0.2:
             y = y_o - 0.2
             while y <= y_o + 0.2:
-                z_o = max(z_o, self.get_terrain_height(x, y))
+                z_o = max(z_o, self.__get_terrain_height(x, y))
                 y += 0.05
             x += 0.05
 
@@ -273,7 +302,7 @@ class simulation:
         if self.self_collision_enabled:
             self.quadruped = self.p.loadURDF(
                 self.giadog_urdf_file, 
-                [x_o, y_o, self.get_terrain_height(x_o, y_o, 0) + 0.3],
+                [x_o, y_o, self.__get_terrain_height(x_o, y_o, 0) + 0.3],
                 flags = self.p.URDF_USE_SELF_COLLISION | \
                    self.p.URDF_USE_SELF_COLLISION_INCLUDE_PARENT,
                    useFixedBase = fix_robot_base,
@@ -281,7 +310,7 @@ class simulation:
         else:
             self.quadruped = self.p.loadURDF(
                 self.giadog_urdf_file, 
-                [x_o, y_o, self.get_terrain_height(x_o, y_o, 0) + 0.3],
+                [x_o, y_o, self.__get_terrain_height(x_o, y_o, 0) + 0.3],
                 useFixedBase = fix_robot_base,
             )
 
@@ -322,45 +351,43 @@ class simulation:
         self.__reset_state()
         self.__initialize(x_o, y_o)
 
-    def get_terrain_height(self, x: float, y: float) -> float:
+    def actuate_joints(self, joint_target_positions: List[float]):
         """
-            Returns the height of the terrain at x,y coordinates (in cartesian world 
-            coordiantes). This function assumes the terrain has no bridge 'like' 
-            structures.
+            Moves the robot joints to a given target position.
 
             Arguments:
-            ----------
-            x: float 
-                x position in cartesian global coordinates.
-            y: float
-                y position in cartesian global coordinates.
-            
-            Return:
-            -------
-            float 
-                The terrain height at that x, y point.
-                numpy.NaN if if the coordinates go off the map
+            ---------
+                joint_target_positions: List[float], shape (12,)
+                    Quadruped joints desired angles. 
+                    The order is the same as for the robot actuated_joints_ids.
+                    The order should be as follows:
+                        'motor_front_left_hip' 
+                        'motor_front_left_upper_leg'// "Front left thigh"
+                        'motor_front_left_lower_leg'// "Front left shank"
+
+                        'motor_front_right_hip' 
+                        'motor_front_right_upper_leg'// "Front right thigh"
+                        'motor_front_right_lower_leg'// "Front right shank"
+
+                        'motor_back_left_hip' 
+                        'motor_back_left_upper_leg'// "Back left thigh"
+                        'motor_back_left_lower_leg'// "Back left shank"
+
+                        'motor_back_right_hip' 
+                        'motor_back_right_upper_leg'// "Back right thigh"
+                        'motor_back_right_lower_leg'// "Back right shank"
+
+                    Note: It may be useful to add the Kp and Kd as inputs
         """
-        x = int(x / self.mesh_scale[0]) + self.center[0]
-        y = int(y / self.mesh_scale[1]) + self.center[1]
+        self.p.setJointMotorControlArray(
+            bodyUniqueId = self.quadruped,
+            jointIndices = self.actuated_joints_ids,
+            controlMode  = self.p.POSITION_CONTROL,
+            targetPositions = joint_target_positions,
+        )    
 
-        rows, cols = self.terrain_array.shape
-        if x < 0 or x >= rows or y < 0 or y >= cols: return np.NaN
 
-        return self.terrain_array[x][y] - self.z_diff 
-
-    def update_historic_data(self):
-        """ 
-            Updates the joint position error history for the current simulation step.
-        """
-        # TODO
-        self.joint_position_error_history[1] = self.joint_velocity_history[0]
-        #self.joint_position_error_history[0] = self.joint_position_error 
-        self.joint_velocity_history[1] = self.joint_velocity_history[0]
-        self.joint_velocity_history[0] = self.joint_velocities 
-        self.foot_target_history[1]  = self.foot_target_history[0]
-        #self.foot_target_history[0]  = self.foot_target
-
+    # =========================== UPDATE FUNCTIONS =========================== #
     def update_base_velocity(self):
         """
             Updates the base linear and angular velocity for the current simulation step.
@@ -452,7 +479,7 @@ class simulation:
             roll, pitch, yaw = self.p.getEulerFromQuaternion(toe_orientation)
             x,y,z =  toe_position 
             P = self.__get_foot_height_scan_coordinates(x,y,yaw) 
-            z_terrain = [self.get_terrain_height(x_p,y_p) for (x_p,y_p) in P]
+            z_terrain = [self.__get_terrain_height(x_p,y_p) for (x_p,y_p) in P]
             self.height_scan_lines[i] = np.array([ 
                 [[x, y, z], [x_p, y_p, z_t]] for (x_p, y_p), z_t in zip(P, z_terrain)]
             )
@@ -480,7 +507,7 @@ class simulation:
             Update position, velocity and torque for each joint for the current
             simulation step.
         """
-        # (Position / Velocity / Torque)    
+        # (Position / Velocity / Torque
         # Joint angles
         self.joint_angles = np.zeros(12)      # 12 = Number of DOF // Controlled joints
         self.joint_velocities = np.zeros(12)
@@ -494,6 +521,74 @@ class simulation:
             self.joint_angles[i] = j_state.jointPosition
             self.joint_velocities[i] = j_state.jointVelocity
             self.joint_torques[i] = j_state.appliedJointMotorTorque
+
+    def update_transformation_matrices(self, leg_span: float=0.2442):
+        """
+            Update the transformation matrices from the hip to the leg base.
+
+            Arguments:
+            ---------
+                leg_span: float, optional
+                    Distance of the extended leg.
+                    Default = 0.2442
+        """
+        # First we get the base orientation
+        _, base_orientation = self.p.getBasePositionAndOrientation(self.quadruped)
+        # We transform the base orientation from quaternion to matrix
+        base_orientation_matrix = self.p.getMatrixFromQuaternion(base_orientation)
+        base_orientation_matrix = np.array(base_orientation_matrix).reshape(3,3)
+        # We also get the base euler angles
+        _, _, base_yaw = self.p.getEulerFromQuaternion(base_orientation)
+
+        #self.draw_reference_frame(base_orientation_matrix, base_position)
+        for i in range(4):
+            leg_base_link_state = LinkState(*self.p.getLinkState(
+                bodyUniqueId = self.quadruped,
+                linkIndex = self.hips_ids[i],
+                computeLinkVelocity = False,
+                computeForwardKinematics = False
+            ))
+
+            # We get the leg_base position (We are not insterested in the 
+            # orientation,as we are referning to a leg base frame with the same 
+            # orientation as the base)
+            leg_base_position = leg_base_link_state.worldLinkFramePosition
+            leg_base_position = np.array(leg_base_position)
+
+            # We want the T_{li}_{o} Homogeneous transformation matrix
+
+            # First we get the R_{li}_{o} rotation matrix
+            R_li_o = base_orientation_matrix.T
+            # Then we get the p_{li}_{o} position vector
+            p_li_o = -R_li_o.dot(leg_base_position)
+            # We get the T_{li}_{o} Homogeneous transformation matrix
+            T_li_o = np.concatenate((R_li_o, p_li_o.reshape(3,1)), axis = 1)
+            T_li_o = np.concatenate((T_li_o, np.array([[0,0,0,1]])), axis = 0)
+            
+            # For each hip we get the orientation of the Hi frame
+            Hi_orientation = self.p.getQuaternionFromEuler([0, 0, base_yaw])
+            # We transform the Hi orientation from quaternion to matrix
+            Hi_orientation_matrix = self.p.getMatrixFromQuaternion(Hi_orientation)
+            Hi_orientation_matrix = np.array(Hi_orientation_matrix).reshape(3,3)
+            # We get the Hi position
+            Hi_position = leg_base_position + np.array([0, 0.063 * (-1)**i, -leg_span])
+            
+            #self.draw_reference_frame(base_orientation_matrix, leg_base_position)
+            #self.draw_reference_frame(Hi_orientation_matrix, Hi_position)
+            # Now we get the T_{o}_{Hi} Homogeneous transformation matrix
+            T_o_Hi = np.concatenate(
+                (
+                    Hi_orientation_matrix, 
+                    Hi_position.reshape(3,1)
+                ), 
+                axis = 1
+            )
+            T_o_Hi = np.concatenate((T_o_Hi, np.array([[0,0,0,1]])), axis = 0)
+
+            # Finally we calculate the T_{li}_{Hi} Homogeneous transformation
+            # matrix
+            T_li_Hi = T_li_o @ T_o_Hi 
+            self.transformation_matrices[i] = T_li_Hi
 
     def update_sensor_output(self):
         """
@@ -526,7 +621,6 @@ class simulation:
                 * joint_velocities
                 * joint_torques
         """
-        self.update_historic_data()
         self.update_base_velocity()
         self.update_toes_contact_info()
         self.update_thighs_contact_info()
@@ -534,164 +628,39 @@ class simulation:
         self.update_height_scan()
         self.update_toes_force()
         self.update_joints_sensors()
+        self.update_transformation_matrices()
 
-    def actuate_joints(self, joint_target_positions: List[float]):
+
+    # =========================== DEBUGGING FUNCTIONS =========================== #
+    def set_toes_friction_coefficients(self, friction_coefficient: float):
         """
-            Moves the robot joints to a given target position.
+            Changes the friction coeficient of the quadruped toes. It sets the 
+            lateral friction coeficient (the one that is mainly used by pybullet)
 
             Arguments:
             ---------
-                joint_target_positions: List[float], shape (12,)
-                    Quadruped joints desired angles. 
-                    The order is the same as for the robot actuated_joints_ids.
-                    The order should be as follows:
-                        'motor_front_left_hip' 
-                        'motor_front_left_upper_leg'// "Front left thigh"
-                        'motor_front_left_lower_leg'// "Front left shank"
-
-                        'motor_front_right_hip' 
-                        'motor_front_right_upper_leg'// "Front right thigh"
-                        'motor_front_right_lower_leg'// "Front right shank"
-
-                        'motor_back_left_hip' 
-                        'motor_back_left_upper_leg'// "Back left thigh"
-                        'motor_back_left_lower_leg'// "Back left shank"
-
-                        'motor_back_right_hip' 
-                        'motor_back_right_upper_leg'// "Back right thigh"
-                        'motor_back_right_lower_leg'// "Back right shank"
-
-                    Note: It may be useful to add the Kp and Kd as inputs
-        """
-        self.p.setJointMotorControlArray(
-            bodyUniqueId = self.quadruped,
-            jointIndices = self.actuated_joints_ids,
-            controlMode  = self.p.POSITION_CONTROL,
-            targetPositions = joint_target_positions,
-        )    
-
-    def get_Hi_to_leg_base_transformation_matrices(self, leg_span = 0.2442):
-        """
-            Returns the transformation matrices from the hip to the leg base.
-        Arguments:
-        ---------
-        self:   simulation object
-        
-        leg_span: float, default = 0.2442. Distance of the extended leg.
-
-        Returns:
-        --------
-        Transformation_matrices: List[np.array], shape (4,4). A list containing 
-            the transformation matrices from the hip to the leg base, for each 
-            of the robots legs.
-
-        """
-        Transformation_matrices = []
-        # First we get the base position and orientation
-        base_position, base_orientation = self.p.getBasePositionAndOrientation(self.quadruped)
-        # We transform the base orientation from quaternion to matrix
-        base_orientation_matrix = self.p.getMatrixFromQuaternion(base_orientation)
-        base_orientation_matrix = np.array(base_orientation_matrix).reshape(3,3)
-        # We also get the base euler angles
-        base_roll, base_pitch, base_yaw = self.p.getEulerFromQuaternion(base_orientation)
-
-        #self.draw_reference_frame(base_orientation_matrix, base_position)
-        for i in range(4):
-            leg_base_link_state = LinkState(*self.p.getLinkState(
-                bodyUniqueId = self.quadruped,
-                linkIndex = self.hips_ids[i],
-                computeLinkVelocity = False,
-                computeForwardKinematics = False
-            ))
-
-            # We get the leg_base position (We are not insterested in the 
-            # orientation,as we are referning to a leg base frame with the same 
-            # orientation as the base)
-            leg_base_position = leg_base_link_state.worldLinkFramePosition
-
-            leg_base_position = np.array(leg_base_position)
-
-            # We want the T_{li}_{o} Homogeneous transformation matrix
-
-            # First we get the R_{li}_{o} rotation matrix
-
-            R_li_o = base_orientation_matrix.T
-
-            # Then we get the p_{li}_{o} position vector
-
-            p_li_o = -R_li_o.dot(leg_base_position)
-
-            # We get the T_{li}_{o} Homogeneous transformation matrix
-
-            T_li_o = np.concatenate((R_li_o, p_li_o.reshape(3,1)), axis = 1)
-            T_li_o = np.concatenate((T_li_o, np.array([[0,0,0,1]])), axis = 0)
-            
-            # For each hip we get the orientation of the Hi frame
-            Hi_orientation = self.p.getQuaternionFromEuler([0, 0, base_yaw])
-            # We transform the Hi orientation from quaternion to matrix
-            Hi_orientation_matrix = self.p.getMatrixFromQuaternion(
-                                                                Hi_orientation)
-            Hi_orientation_matrix = np.array(Hi_orientation_matrix).reshape(3,3)
-            # We get the Hi position
-            Hi_position = leg_base_position + np.array([0, 0.063 * (-1)**i, \
-                                                                - leg_span])
-            
-            #self.draw_reference_frame(base_orientation_matrix, 
-            #                            leg_base_position)
-            #self.draw_reference_frame(Hi_orientation_matrix, Hi_position)
-            # Now we get the T_{o}_{Hi} Homogeneous transformation matrix
-
-            T_o_Hi = np.concatenate((Hi_orientation_matrix, 
-                                    Hi_position.reshape(3,1)), axis = 1)
-            T_o_Hi = np.concatenate((T_o_Hi, np.array([[0,0,0,1]])), axis = 0)
-
-            # Finally we calculate the T_{li}_{Hi} Homogeneous transformation
-            # matrix
-            T_li_Hi = T_li_o @ T_o_Hi 
-            Transformation_matrices.append(T_li_Hi)
-        
-        return Transformation_matrices
-              
-    
-    # Debugging functions
-
-    def set_toes_friction_coefficients(self, friction_coefficient):
-        """
-        Changes the friction coeficient of the quadruped toes. It sets the 
-        lateral friction coeficient (the one that is mainly used by pybullet)
-
-        Arguments:
-            ---------
-            self: Simulation  ->  Simulation class
-
-            friction_coefficient: float -> The desired friction coeficient to be 
-            set on the quadruped toes.
-        
-        Returns:
-            ---------
-            None
-
+                friction_coefficient: float
+                    The desired friction coeficient to be set on the quadruped toes.
         """
         for toe_id in self.toes_ids:
             self.p.changeDynamics(self.quadruped, toe_id, 
             lateralFriction = friction_coefficient)
 
-    def draw_reference_frame(self, R, p, scaling = 0.05):
+    def draw_reference_frame(self, R: np.ndarray, p: np.ndarray, scaling: float=0.05):
         """
-        Draws debug lines of a refrence frame represented by the rotation R and 
-        the position vector p, in the world frame.
+            Draws debug lines of a refrence frame represented by the rotation R and 
+            the position vector p, in the world frame.
 
-        Arguments:
-        ----------
-            self: simulation -> simulation class
-            R   : np.ndarray -> shape (3,3) Rotation matrix
-            p   : np.ndarray -> shape (,3)  Position vector
-        
-        Returns:
-        ----------
-            None
+            Arguments:
+            ----------
+                R: numpy.ndarray, shape (3,3)
+                    Rotation matrix
+                p: numpy.ndarray, shape (3,) 
+                    Position vector
+                scaling: float, optional
+                    [TODO]
+                    Default: 0.05
         """
-        
         # We draw the x axis
         self.p.addUserDebugLine(
             lineFromXYZ = p,
@@ -718,7 +687,6 @@ class simulation:
             lineWidth = 4,
             lifeTime = 0
         )
-                
 
     def draw_height_field_lines(self):
         """ [TODO] """
@@ -744,9 +712,6 @@ class simulation:
                 print_joint_info  -> bool, default False. If True, prints the
                                         joint names and indexs.
         """
-
-        
-        
         if print_joint_info:
             _link_name_to_index = \
                 {self.p.getBodyInfo(self.quadruped)[0].decode('UTF-8'):-1,}
@@ -837,7 +802,6 @@ class simulation:
             print("Shank Lenght", lw)
             print(np.array(toe_position) - np.array(hip_position))
 
-
     def trace_line(self, r_o, r_f, t = 4):    
         """
         Debbuging function to visualize a line between two points in the 
@@ -885,8 +849,8 @@ class simulation:
                                 (0.7, 0, 0.3), 
                                 lifeTime = t)
 
-    # Testing functions
 
+    # =========================== TESTING FUNCTIONS =========================== #
     def test_sensors(self):
         """ 
         Generates a simulation to test the robot's sensors.
@@ -1015,11 +979,7 @@ class simulation:
                 joint_target_positions += list(leg_angles)
             
             self.actuate_joints(joint_target_positions)
-            
-            
-    
-    
-    
+
     def test_FTG(self, controller):
 
         """
@@ -1081,8 +1041,7 @@ class simulation:
                 
             self.actuate_joints(joints_angles)
             t = t+1
-            
-            
+
 
     
 if __name__ == '__main__':

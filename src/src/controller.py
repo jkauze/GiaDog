@@ -22,8 +22,6 @@ class controller:
 
 
     SIGMA_0 = np.array([0,np.pi/2,np.pi,np.pi*1.5])
-
-    
         
     @classmethod     
     def get_domain(cls, x:float, y:float, z:float) -> float:
