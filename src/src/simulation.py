@@ -19,8 +19,11 @@ import numpy as np
 
 
 # Inverse kinematics testing
-from controller import controller
 
+from inverse_kinematics import solve_leg_IK
+from foot_trajectory_generator import calculate_foot_trajectories
+from transformation_matrix_calculator import \
+    get_leg_to_horizontal_frame_transformations
 
 
 class simulation:
@@ -362,6 +365,7 @@ class simulation:
                 * joint_angles
                 * joint_velocities
                 * joint_torques
+            
             Arguments:
             ----------
             self
@@ -380,13 +384,18 @@ class simulation:
         #self.foot_target_history[0]  = self.foot_target
 
 
-        # =========================  Base Velocity =========================  #
+        # =========================  Base Velocity ==========================  #
         self.base_linear_velocity, self.base_angular_velocity  = np.array(
             self.p.getBaseVelocity(self.quadruped)
         )
 
+        # ========================= Base Orientation ========================= #
 
-        # ========================= Contact info ========================= #
+        self.base_rpy = np.array(self.p.getEulerFromQuaternion(
+            self.p.getBasePositionAndOrientation(self.quadruped)[1] 
+            ))
+
+        # ========================= Contact info ============================= #
         # Toes
         self.terrain_normal_at_each_toe = np.zeros([4, 3])
         self.contact_force_at_each_toe = np.zeros([4])
@@ -550,6 +559,7 @@ class simulation:
         # We also get the base euler angles
         base_roll, base_pitch, base_yaw = self.p.getEulerFromQuaternion(base_orientation)
 
+        
         #self.draw_reference_frame(base_orientation_matrix, base_position)
         for i in range(4):
             leg_base_link_state = LinkState(*self.p.getLinkState(
@@ -604,7 +614,27 @@ class simulation:
             # matrix
             T_li_Hi = T_li_o @ T_o_Hi 
             Transformation_matrices.append(T_li_Hi)
-        
+        """
+        for i in range(4):
+            # We calculate the Hi frame  relative to the leg base position (hip)
+            p_li_hi = np.array([0,  0.063 * (-1)**i,  -leg_span])
+            
+            # We do the same for the leg base orientation
+            
+            R_o_Hi = self.p.getQuaternionFromEuler([0, 0, base_yaw])
+            # We transform the Hi orientation from quaternion to matrix
+            R_o_Hi = np.array(self.p.getMatrixFromQuaternion(R_o_Hi)).reshape(3,3)
+            #q_i = self.p.getQuaternionFromEuler([base_roll, base_pitch, 0])
+            #R_li_Hi = np.array(self.p.getMatrixFromQuaternion(q_i)).reshape(3,3)
+            R_li_Hi = base_orientation_matrix.T @  R_o_Hi                                                  
+            # Finally we concatenate the rotation matrix and position vector
+            # To get the transformation matrix from the Hi horizontal frame to the 
+            # leg base
+            T_li_Hi =  np.concatenate((R_li_Hi, p_li_hi.reshape(3,1)), axis = 1)
+            T_li_Hi = np.concatenate((T_li_Hi, np.array([[0,0,0,1]])), axis = 0)
+
+            Transformation_matrices.append(T_li_Hi)
+        """
         return Transformation_matrices
               
     
@@ -897,14 +927,14 @@ class simulation:
                 friction = (friction==0.4)*0.9 + (friction==0.9)*0.1 + \
                                     (friction==0.1)*0.4    
     
-    def test_controller_IK(self, controller):
+    def test_controller_IK(self):
         """
         Test function to test the controller's Inverse Kinematicks
 
         Arguments
         ----------
-        self : simulation object
-        controller : controller object
+        self : -> simulation object
+        
 
         Returns
         -------
@@ -961,11 +991,9 @@ class simulation:
                                                     self.hips_ids[i])[4]) 
   
                 if i%2==0: 
-                    leg_angles = controller.solve_leg_IK("LEFT",
-                                                    objective_position)                                        
+                    leg_angles = solve_leg_IK("LEFT", objective_position)                                       
                 else:
-                    leg_angles = controller.solve_leg_IK("RIGHT",
-                                                    objective_position)
+                    leg_angles = solve_leg_IK("RIGHT", objective_position)
                 
                 joint_target_positions += list(leg_angles)
             
@@ -975,16 +1003,15 @@ class simulation:
     
     
     
-    def test_FTG(self, controller):
+    def test_FTG(self):
 
         """
         Tesitng function to test the controller's Foot Trajectory Generator.
 
         Arguments
         ----------
-        self : simulation object
+        self :-> simulation object
             The simulation object.
-        controller : Controller class
 
         Return
         ------
@@ -994,12 +1021,9 @@ class simulation:
         t = 0
         # We create a constraint to keep the quadruped over the ground
        
-        hip_position = np.array(self.p.getLinkState(self.quadruped,  
-        self.hips_ids[0])[4]) 
-        toe_position = np.array(self.p.getLinkState(self.quadruped,  
-        self.toes_ids[0])[4])
         
-
+        
+        sigma_0 = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
         while True: 
             self.p.stepSimulation()
             self.update_sensor_output()
@@ -1008,31 +1032,41 @@ class simulation:
             # 
             if t%5 == 0:
                 joints_angles = []
-                Hi_z = np.array([0,0,1])
                 nn_output = [0]*16
                 target_foot_positions, FTG_frequencies, FTG_phases = \
-                    controller.apply_FTG(nn_output, t/240)
-                T_list = self.get_Hi_to_leg_base_transformation_matrices()
+                        calculate_foot_trajectories(nn_output, t/240,
+                                                    sigma_0 = sigma_0,
+                                                    f_0=12)
+                T_list = \
+                    get_leg_to_horizontal_frame_transformations(self.base_rpy)
+                
                 for i in range(4):
                     r_Hip = np.array(self.p.getLinkState(self.quadruped, 
                             self.hips_ids[i])[4])
-                    r = target_foot_positions[i]
+                    
+                    r_o = target_foot_positions[i]
                     T = T_list[i]
+
+                    
+                    r = T @ np.concatenate((r_o, [1]), axis = 0)
+                    r = r[:3]
                     if i%2==0:
-                        leg_angles = controller.apply_IK(T, r, 
-                                                        leg_type = "LEFT")
+                        leg_angles = solve_leg_IK("LEFT", r)
                     else:
-                        leg_angles = controller.apply_IK(T, r, 
-                                                        leg_type = "RIGHT")
-                    self.trace_line(
-                                    (r_Hip[0], 
-                                    r_Hip[1] +  0.063* (-1)**i, 
-                                    r_Hip[2]-0.2442), 
-                                    (r_Hip[0], 
-                                    r_Hip[1] +  0.063 * (-1)**i, 
-                                    r_Hip[2]-0.2442) + r , 
-                                    t =0.2)
+                        leg_angles = solve_leg_IK("RIGHT", r)
+                    
                     joints_angles += list(leg_angles)
+
+                    # debug
+                    self.trace_line(
+                                    np.array([r_Hip[0], 
+                                    r_Hip[1] +  0.063 * (-1)**i, 
+                                    r_Hip[2] - 0.2442]), 
+                                    np.array([r_Hip[0], 
+                                    r_Hip[1] +  0.063 * (-1)**i, 
+                                    r_Hip[2] - 0.2442]) + r_o , 
+                                    t =0.2)
+                    
                 
             self.actuate_joints(joints_angles)
             t = t+1
@@ -1048,7 +1082,7 @@ if __name__ == '__main__':
                 gravity_vector = np.array([0, 0, -9.81]),
                 self_collision_enabled=False)
     
-    sim.initialize(fix_robot_base=False) 
+    sim.initialize(fix_robot_base=True) 
 
-    sim.test_FTG(controller)
+    sim.test_controller_IK()
 
