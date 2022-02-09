@@ -58,7 +58,7 @@ class teacher_giadog_env(gym.Env):
     SWIGN_PH = 0   # Swign phase
     TERRAIN_FILE = 'gym_terrain.txt'
     # ROS publisher node that update the spot mini joints
-    reset_pub = rospy.Publisher('reset_pub', text, QUEUE_SIZE)
+    reset_pub = rospy.Publisher('reset_simulation', text, QUEUE_SIZE)
     # ROS publisher node that update the spot mini joints
     joints_pub = rospy.Publisher('spot_joints', joint_angles, QUEUE_SIZE)
 
