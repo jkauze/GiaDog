@@ -74,7 +74,7 @@ class student_nn(controller_neural_network):
                 year = {2020},
                 publisher = {GitHub},
                 journal = {GitHub repository},
-                howpublished = {\url{https://github.com/philipperemy/keras-tcn}},
+                howpublished = {\ url{https://github.com/philipperemy/keras-tcn}},
             }
     """
     INPUT_LENGTH = 100

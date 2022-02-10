@@ -18,9 +18,9 @@ import numpy as np
 
 # Inverse kinematics testing
 
-from inverse_kinematics import solve_leg_IK
-from foot_trajectory_generator import calculate_foot_trajectories
-from transformation_matrix_calculator import \
+from src.inverse_kinematics import solve_leg_IK
+from src.foot_trajectory_generator import calculate_foot_trajectories
+from src.transformation_matrix_calculator import \
     get_leg_to_horizontal_frame_transformations
 
 class simulation:
@@ -142,11 +142,15 @@ class simulation:
         """
             Reset bot state.
         """
+        self.position                  = np.zeros([3])
+        self.orientation               = np.zeros([2])
+
         # State data // Sensor data
         self.desired_direction         = np.zeros([2])
         self.desired_turning_direction = np.zeros([1])
         self.base_linear_velocity      = np.zeros([3])
         self.base_angular_velocity     = np.zeros([3])
+        self.base_rpy                  = np.zeros([3])
         self.joint_angles              = np.zeros([12]) 
         self.joint_velocities          = np.zeros([12])
 
@@ -158,15 +162,15 @@ class simulation:
         # Priviledge data
         self.terrain_normal_at_each_toe = np.zeros([4, 3])
         self.normal_force_at_each_toe   = np.zeros([4]) # (Foot contact forces?¿)
-        self.toes_contact_states        = np.zeros([4])
-        self.thighs_contact_states      = np.zeros([4])
-        self.shanks_contact_states      = np.zeros([4])
+        self.toes_contact_states        = np.zeros([4], dtype=np.int8)
+        self.thighs_contact_states      = np.zeros([4], dtype=np.int8)
+        self.shanks_contact_states      = np.zeros([4], dtype=np.int8)
         self.height_scan_at_each_toe    = np.zeros([4, 9])
         self.contact_force_at_each_toe  = np.zeros([4])
         self.foot_ground_friction_coefficients = np.zeros([4])
 
         # For debug:
-        self.height_scan_lines = np.zeros([4,9,2, 3])
+        self.height_scan_lines = np.zeros([4,9,2,3])
         self.external_force_applied_to_the_base = np.zeros([3])
 
         # Data only for reward purposes
@@ -176,7 +180,7 @@ class simulation:
         self.toe_force_sensor = np.zeros(4) 
 
         # Transformation matrices from the hip to the leg base
-        self.transformation_matrices = np.zeros((4,4))
+        self.transformation_matrices = np.zeros((4,4,4))
 
     @staticmethod
     def __get_foot_height_scan_coordinates(
@@ -305,7 +309,7 @@ class simulation:
         if self.self_collision_enabled:
             self.quadruped = self.p.loadURDF(
                 self.giadog_urdf_file, 
-                [x_o, y_o, self.__get_terrain_height(x_o, y_o, 0) + 0.3],
+                [x_o, y_o, self.__get_terrain_height(x_o, y_o) + 0.3],
                 flags = self.p.URDF_USE_SELF_COLLISION | \
                    self.p.URDF_USE_SELF_COLLISION_INCLUDE_PARENT,
                    useFixedBase = fix_robot_base,
@@ -313,7 +317,7 @@ class simulation:
         else:
             self.quadruped = self.p.loadURDF(
                 self.giadog_urdf_file, 
-                [x_o, y_o, self.__get_terrain_height(x_o, y_o, 0) + 0.3],
+                [x_o, y_o, self.__get_terrain_height(x_o, y_o) + 0.3],
                 useFixedBase = fix_robot_base,
             )
 
@@ -391,6 +395,11 @@ class simulation:
 
 
     # =========================== UPDATE FUNCTIONS =========================== #
+    def update_position_orientation(self):
+        self.position, self.orientation = \
+            self.p.getBasePositionAndOrientation(self.quadruped)
+        self.orientation = np.array(self.p.getEulerFromQuaternion(self.orientation))
+
     def update_base_velocity(self):
         """
             Updates the base linear and angular velocity for the current simulation step.
@@ -487,7 +496,7 @@ class simulation:
             toe_position =  toe_link_state.linkWorldPosition
         
             # Height scan around each foot 
-            roll, pitch, yaw = self.p.getEulerFromQuaternion(toe_orientation)
+            _, _, yaw = self.p.getEulerFromQuaternion(toe_orientation)
             x,y,z =  toe_position 
             P = self.__get_foot_height_scan_coordinates(x,y,yaw) 
             z_terrain = [self.__get_terrain_height(x_p,y_p) for (x_p,y_p) in P]
@@ -533,74 +542,12 @@ class simulation:
             self.joint_velocities[i] = j_state.jointVelocity
             self.joint_torques[i] = j_state.appliedJointMotorTorque
 
-    def update_transformation_matrices(self, leg_span: float=0.2442):
+    def update_transformation_matrices(self):
         """
             Update the transformation matrices from the hip to the leg base.
-
-            Arguments:
-            ---------
-                leg_span: float, optional
-                    Distance of the extended leg.
-                    Default = 0.2442
         """
-        # First we get the base orientation
-        _, base_orientation = self.p.getBasePositionAndOrientation(self.quadruped)
-        # We transform the base orientation from quaternion to matrix
-        base_orientation_matrix = self.p.getMatrixFromQuaternion(base_orientation)
-        base_orientation_matrix = np.array(base_orientation_matrix).reshape(3,3)
-        # We also get the base euler angles
-        _, _, base_yaw = self.p.getEulerFromQuaternion(base_orientation)
-
-        
-        #self.draw_reference_frame(base_orientation_matrix, base_position)
-        for i in range(4):
-            leg_base_link_state = LinkState(*self.p.getLinkState(
-                bodyUniqueId = self.quadruped,
-                linkIndex = self.hips_ids[i],
-                computeLinkVelocity = False,
-                computeForwardKinematics = False
-            ))
-
-            # We get the leg_base position (We are not insterested in the 
-            # orientation,as we are referning to a leg base frame with the same 
-            # orientation as the base)
-            leg_base_position = leg_base_link_state.worldLinkFramePosition
-            leg_base_position = np.array(leg_base_position)
-
-            # We want the T_{li}_{o} Homogeneous transformation matrix
-
-            # First we get the R_{li}_{o} rotation matrix
-            R_li_o = base_orientation_matrix.T
-            # Then we get the p_{li}_{o} position vector
-            p_li_o = -R_li_o.dot(leg_base_position)
-            # We get the T_{li}_{o} Homogeneous transformation matrix
-            T_li_o = np.concatenate((R_li_o, p_li_o.reshape(3,1)), axis = 1)
-            T_li_o = np.concatenate((T_li_o, np.array([[0,0,0,1]])), axis = 0)
-            
-            # For each hip we get the orientation of the Hi frame
-            Hi_orientation = self.p.getQuaternionFromEuler([0, 0, base_yaw])
-            # We transform the Hi orientation from quaternion to matrix
-            Hi_orientation_matrix = self.p.getMatrixFromQuaternion(Hi_orientation)
-            Hi_orientation_matrix = np.array(Hi_orientation_matrix).reshape(3,3)
-            # We get the Hi position
-            Hi_position = leg_base_position + np.array([0, 0.063 * (-1)**i, -leg_span])
-            
-            #self.draw_reference_frame(base_orientation_matrix, leg_base_position)
-            #self.draw_reference_frame(Hi_orientation_matrix, Hi_position)
-            # Now we get the T_{o}_{Hi} Homogeneous transformation matrix
-            T_o_Hi = np.concatenate(
-                (
-                    Hi_orientation_matrix, 
-                    Hi_position.reshape(3,1)
-                ), 
-                axis = 1
-            )
-            T_o_Hi = np.concatenate((T_o_Hi, np.array([[0,0,0,1]])), axis = 0)
-
-            # Finally we calculate the T_{li}_{Hi} Homogeneous transformation
-            # matrix
-            T_li_Hi = T_li_o @ T_o_Hi 
-            self.transformation_matrices[i] = T_li_Hi
+        self.transformation_matrices = \
+            get_leg_to_horizontal_frame_transformations(self.base_rpy)
 
     def update_sensor_output(self):
         """
@@ -633,7 +580,9 @@ class simulation:
                 * joint_velocities
                 * joint_torques
         """
+        self.update_position_orientation()
         self.update_base_velocity()
+        self.update_base_rpy()
         self.update_toes_contact_info()
         self.update_thighs_contact_info()
         self.update_shanks_contact_info()
@@ -641,7 +590,6 @@ class simulation:
         self.update_toes_force()
         self.update_joints_sensors()
         self.update_transformation_matrices()
-
 
     # =========================== DEBUGGING FUNCTIONS =========================== #
     def set_toes_friction_coefficients(self, friction_coefficient: float):

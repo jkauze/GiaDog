@@ -49,6 +49,7 @@ add_message_files(
   normal_data.msg 
   priviliged_data.msg
   text.msg
+  timestep.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
@@ -85,6 +86,6 @@ catkin_package(
 ## in contrast to setup.py, you can choose the destination
 install(PROGRAMS
   src/simulate.py
-  src/spot_interface.py
+  src/train.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
