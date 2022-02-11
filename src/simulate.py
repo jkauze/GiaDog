@@ -76,7 +76,7 @@ def update_sensors(
     print(f'\033[1;36m[i]\033[0m Updating {data_name}.')
     rate = rospy.Rate(steps_per_real_second) 
     while True: 
-        try: update_function
+        try: update_function()
         except p.error as e: 
             print(f'\033[1;93m[w]\033[0m Warning: {e}')
             sleep(1)

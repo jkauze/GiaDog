@@ -151,7 +151,7 @@ class teacher_giadog_env(gym.Env):
         ts.registerCallback(self.__update_obs)
 
         #self.H = np.zeros((self.HISTORY_LEN, controller_neural_network.NORMAL_DATA_SHAPE))
-        self.foot_target_hist = np.zeros((self.FOOT_HISTORY_LEN, 12))
+        self.foot_target_hist = np.zeros((self.FOOT_HISTORY_LEN, 4, 3))
         #self.model = teacher_nn()
     
     def __actuate_joints(cls, joint_target_positions: List[float]):
@@ -237,7 +237,7 @@ class teacher_giadog_env(gym.Env):
 
                 # Verify that the height of the i-th foot is greater than the height of 
                 # the surrounding terrain
-                for height in self.height_scan:
+                for height in self.height_scan[i]:
                     if self.foot_target_hist[0][i][2] <= height:
                         foot_clear -= 1
                         break
@@ -271,16 +271,7 @@ class teacher_giadog_env(gym.Env):
         r_bc = -sum(self.thighs_contact) - sum(self.shanks_contact)
 
         # Target Smoothness Reward
-        r_fd_T = []
-        for i in range(3):
-            r_fd_T.append(np.ndarray([
-                self.foot_target_hist[i][0][0], self.foot_target_hist[i][0][1], 
-                self.foot_target_hist[i][0][2], self.foot_target_hist[i][1][0], 
-                self.foot_target_hist[i][1][1], self.foot_target_hist[i][1][2],
-                self.foot_target_hist[i][2][0], self.foot_target_hist[i][2][1], 
-                self.foot_target_hist[i][2][2], self.foot_target_hist[i][3][0], 
-                self.foot_target_hist[i][3][1], self.foot_target_hist[i][3][2]
-            ]))
+        r_fd_T = np.reshape(self.foot_target_hist, (3,-1))
         r_s = -np.linalg.norm(r_fd_T[0] - 2.0 * r_fd_T[1] + r_fd_T[2])
 
         # Torque Reward

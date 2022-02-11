@@ -386,12 +386,15 @@ class simulation:
 
                     Note: It may be useful to add the Kp and Kd as inputs
         """
-        self.p.setJointMotorControlArray(
-            bodyUniqueId = self.quadruped,
-            jointIndices = self.actuated_joints_ids,
-            controlMode  = self.p.POSITION_CONTROL,
-            targetPositions = joint_target_positions,
-        )    
+        try:
+            self.p.setJointMotorControlArray(
+                bodyUniqueId = self.quadruped,
+                jointIndices = self.actuated_joints_ids,
+                controlMode  = self.p.POSITION_CONTROL,
+                targetPositions = joint_target_positions,
+            )
+        except Exception as e:
+            print(f'\033[1;93m[w]\033[0m {e}.')
 
 
     # =========================== UPDATE FUNCTIONS =========================== #
@@ -446,8 +449,8 @@ class simulation:
                 self.toes_contact_states[i] = 0
             else:
                 contact_force, fricction_coefficient, normal = \
-                    self._contact_info_average(
-                    [ContactInfo(*elem) for elem in  (toe_contact_info)]
+                    self.__contact_info_average(
+                    [ContactInfo(*elem) for elem in (toe_contact_info)]
                 )
                 self.terrain_normal_at_each_toe[i] = normal
                 self.contact_force_at_each_toe[i] = contact_force
