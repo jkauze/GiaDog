@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 import rospy
+import numpy as np
+from time import sleep
+from random import randint
 from src.giadog_gym import *
 
 if __name__ == '__main__':
-    import numpy as np
-    from time import sleep
-    from random import randint
-
-
     rospy.init_node('train', anonymous=True)
     train_env = teacher_giadog_env()
     train_env.make_terrain(

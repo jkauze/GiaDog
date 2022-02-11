@@ -25,6 +25,18 @@ from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data, text, 
 from src.inverse_kinematics import *
 from src.foot_trajectory_generator import *
 
+
+# Cargamos las variables de entorno
+with open('.env.json', 'r') as f:
+    ENV = json.load(f)
+# Obtenemos las constantes necesarias
+QUEUE_SIZE   = ENV["ROS"]["QUEUE_SIZE"]
+VEL_TH       = ENV["PHYSICS"]["VELOCITY_THRESHOLD"]
+SWIGN_PH     = ENV["PHYSICS"]["SWING_PHASE"]
+TERRAIN_FILE = ENV["SIMULATION"]["TERRAIN_FILE"]
+HISTORY_LEN  = ENV["NEURAL_NETWORK"]["HISTORY_LEN"]
+
+
 class teacher_giadog_env(gym.Env):
     """
         Description:
@@ -57,11 +69,6 @@ class teacher_giadog_env(gym.Env):
         --------------------
             (TODO)
     """
-    QUEUE_SIZE = 10
-    VEL_TH   = 0.6 # Velocity threshold
-    SWIGN_PH = 0   # Swign phase
-    TERRAIN_FILE = 'gym_terrain.txt'
-    HISTORY_LEN = 100
     FOOT_HISTORY_LEN = 3
 
     # ROS publisher node that update the spot mini joints
@@ -144,13 +151,13 @@ class teacher_giadog_env(gym.Env):
         )
         ts = message_filters.ApproximateTimeSynchronizer(
             [timestep_sub, normal_data_sub, priviliged_data_sub], 
-            queue_size=self.QUEUE_SIZE,
+            queue_size=QUEUE_SIZE,
             slop=0.1,
             allow_headerless=True
         )
         ts.registerCallback(self.__update_obs)
 
-        #self.H = np.zeros((self.HISTORY_LEN, controller_neural_network.NORMAL_DATA_SHAPE))
+        #self.H = np.zeros((HISTORY_LEN, controller_neural_network.NORMAL_DATA_SHAPE))
         self.foot_target_hist = np.zeros((self.FOOT_HISTORY_LEN, 4, 3))
         #self.model = teacher_nn()
     
@@ -232,7 +239,7 @@ class teacher_giadog_env(gym.Env):
         foot_clear = 4
         for i in range(4):
             # If i-th foot is in swign phase.
-            if ftg_freqs[i] >= self.SWIGN_PH:
+            if ftg_freqs[i] >= SWIGN_PH:
                 count_swing += 1
 
                 # Verify that the height of the i-th foot is greater than the height of 
@@ -246,8 +253,8 @@ class teacher_giadog_env(gym.Env):
         # Linear Velocity Reward
         if zero:
             r_lv = 0
-        elif proj_linear_vel < self.VEL_TH:
-            r_lv = np.exp(-2 * (proj_linear_vel - self.VEL_TH) ** 2)
+        elif proj_linear_vel < VEL_TH:
+            r_lv = np.exp(-2 * (proj_linear_vel - VEL_TH) ** 2)
         else:
             r_lv = 1
 
@@ -255,8 +262,8 @@ class teacher_giadog_env(gym.Env):
         r_av = 0
         if self.turn_dir == 0:
             r_av = 0
-        elif proj_angular_vel < self.VEL_TH:
-            r_av = np.exp(-1.5 * (proj_angular_vel - self.VEL_TH) ** 2)
+        elif proj_angular_vel < VEL_TH:
+            r_av = np.exp(-1.5 * (proj_angular_vel - VEL_TH) ** 2)
         else:
             r_av = 1
 
@@ -367,7 +374,7 @@ class teacher_giadog_env(gym.Env):
         self.turn_dir = randint(-1, 1)
 
         # We store the terrain in a file
-        terrain_gen.save(terrain, self.TERRAIN_FILE)
+        terrain_gen.save(terrain, TERRAIN_FILE)
 
     def reset(self, terrain_file: str=''):
         """

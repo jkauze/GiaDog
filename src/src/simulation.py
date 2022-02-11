@@ -6,6 +6,7 @@
 """
 
 # Utilities
+import json
 import time
 from typing import *
 
@@ -17,96 +18,53 @@ from src.bullet_dataclasses import *
 import numpy as np
 
 # Inverse kinematics testing
-
 from src.inverse_kinematics import solve_leg_IK
 from src.foot_trajectory_generator import calculate_foot_trajectories
 from src.transformation_matrix_calculator import \
     get_leg_to_horizontal_frame_transformations
+
+
+# Cargamos las variables de entorno
+with open('.env.json', 'r') as f:
+    ENV = json.load(f)
+# Obtenemos las constantes necesarias
+GRAVITY_VECTOR = np.array(ENV["PHYSICS"]["GRAVITY_VECTOR"])
+MESH_SCALE     = ENV["SIMULATION"]["MESH_SCALE"]
+JOINTS_IDS     = ENV["SIMULATION"]["JOINTS_IDS"]
+HIPS_IDS       = ENV["SIMULATION"]["HIPS_IDS"]
+THIGHS_IDS     = ENV["SIMULATION"]["THIGHS_IDS"]
+SHANKS_IDS     = ENV["SIMULATION"]["SHANKS_IDS"]
+TOES_IDS       = ENV["SIMULATION"]["TOES_IDS"]  
+
 
 class simulation:
     """ Control and monitor the simulation of the spot-mini in pybullet. """
     def __init__(
             self,
             giadog_urdf_file: str,
-            bullet_server, #Basically the pybullet module
-            mesh_scale: List[float]=[1/50, 1/50, 1],
-            actuated_joints_ids: List[int] = [7,8,9, 11,12,13, 16,17,18, 20,21,22], 
-            hips_ids: List[int] = [7,11,16,20],
-            thighs_ids: List[int] = [8, 12, 17, 21],
-            shanks_ids: List[int] = [9, 13, 18, 22],
-            toes_ids: List[int]   = [10, 14, 19, 23],
-            gravity_vector: np.ndarray = np.array([0, 0, -9.807]),
+            bullet_server,
             gui: bool=False,
-            self_collision_enabled: bool = False,
+            self_collision_enabled: bool=False,
         ): 
         """
             Arguments:
             ----------
                 giadog_urdf_file: str 
                     Path to the URDF file of the quadruped robot.
+
                 bullet_server: module 
                     Pybullet module.
-                mesh_scale: List[float], shape (3,), optional 
-                    Scaling parameters for the terrain file.
-                    Default: [1/50, 1/50, 1]
-                actuated_joints_ids: List[int], shape (12,)optional 
-                    List with the ids of the quadruped robot actuated joints.
-                    The order should be as follows:
-                    
-                        'motor_front_left_hip' 
-                        'motor_front_left_upper_leg'// "Front left thigh" 
-                        'motor_front_left_lower_leg'// "Front left shank"
 
-                        'motor_front_right_hip' 
-                        'motor_front_right_upper_leg'// "Front right thigh" 
-                        'motor_front_right_lower_leg'// "Front right shank"
-
-                        'motor_back_left_hip' 
-                        'motor_back_left_upper_leg'// "Back left thigh" 
-                        'motor_back_left_lower_leg'// "Back left shank"
-
-                        'motor_back_right_hip' 
-                        'motor_back_right_upper_leg'// "Back right thigh" 
-                        'motor_back_right_lower_leg'// "Back right shank"
-
-                    Default: [7,8,9, 11,12,13, 16,17,18, 20,21,22]
-                thighs_ids: List[int], shape (4,), optional
-                    Thigs joints id list (The order is below).
-                    Default: [8, 12, 17, 21]
-                shanks_ids  : List[int], shape (4,), optional
-                    Shank joints id list (The order is below).
-                    Default: [9, 13, 18, 22]
-                toes_ids   : List[int], shape (4,), optional
-                    Toes joints id list (The order is below).
-                    The order is the following:
-                        front_left  (thigh/shak/toe)
-                        front_right (thigh/shak/toe)
-                        back_left   (thigh/shak/toe)
-                        back_right  (thigh/shak/toe)
-                    Default: [10, 14, 19, 23]
-                gravity_vector: np.ndarray, shape (3,), optional
-                    Simulation gravity vector.
-                    Default: [0, 0, -9.807]
                 gui: bool, optional
                     Indicates if the simulation GUI will be displayed.
                     Default: False
+
                 self_collision_enabled: bool, optional
                     TODO
                     Default: False
         """
         self.giadog_urdf_file = giadog_urdf_file
         self.p = bullet_server
-        self.mesh_scale = mesh_scale
-        self.gravity_vector = gravity_vector
-
-        # Robot joint ids
-        self.actuated_joints_ids = actuated_joints_ids
-        self.hips_ids = hips_ids
-        self.thighs_ids = thighs_ids
-        self.shanks_ids = shanks_ids
-        self.toes_ids = toes_ids
-
-        # Self collision flag
         self.self_collision_enabled = self_collision_enabled
         
         self.p.connect(self.p.GUI if gui else self.p.DIRECT)
@@ -119,19 +77,20 @@ class simulation:
 
             Arguments:
             ----------
-            x: float 
-                x position in cartesian global coordinates.
-            y: float
-                y position in cartesian global coordinates.
+                x: float 
+                    x position in cartesian global coordinates.
+
+                y: float
+                    y position in cartesian global coordinates.
             
             Return:
             -------
-            float 
-                The terrain height at that x, y point.
-                numpy.NaN if if the coordinates go off the map
+                float 
+                    The terrain height at that x, y point.
+                    numpy.NaN if if the coordinates go off the map
         """
-        x = int(x / self.mesh_scale[0]) + self.center[0]
-        y = int(y / self.mesh_scale[1]) + self.center[1]
+        x = int(x / MESH_SCALE[0]) + self.center[0]
+        y = int(y / MESH_SCALE[1]) + self.center[1]
 
         rows, cols = self.terrain_array.shape
         if x < 0 or x >= rows or y < 0 or y >= cols: return np.NaN
@@ -183,11 +142,7 @@ class simulation:
         self.transformation_matrices = np.zeros((4,4,4))
 
     @staticmethod
-    def __get_foot_height_scan_coordinates(
-            x: float, 
-            y: float,
-            alpha: float
-        ) -> np.ndarray:
+    def __get_foot_height_scan_coordinates(x: float, y: float, alpha: float) -> np.array:
         """
             Given a robot toe position and orientation, returns the positions of the toe 
             height sensor corrdinates.
@@ -203,7 +158,7 @@ class simulation:
 
             Return:
             -------
-                numpy.ndarray, shape (9, 2)
+                numpy.array, shape (9, 2)
                     Array with each of the toe height sensor coordinates.
         """
         n = 9      # Number of points around each foot
@@ -220,25 +175,27 @@ class simulation:
     @staticmethod
     def __contact_info_average(
             contact_points_info: List[ContactInfo]
-            ) -> Tuple[float, float, np.ndarray]: 
+        ) -> Tuple[float, float, np.array]: 
         """
             Given a robot toe position and orientation, returns the positions of the toe 
             height sensor coordinates.
 
             Arguments:
             ----------
-            contact_points_info: List[ContactInfo] 
-                List containing the contact info of each point that has contact with the
-                leg foot.
+                contact_points_info: List[ContactInfo] 
+                    List containing the contact info of each point that has contact with 
+                    the leg foot.
             
             Returns:
             --------
-            float
-                magnitude of the normmal force on the foot.
-            float
-                Friction coeficient between the foot and the terrain.
-            np.array, shape (3,)
-                direction of the normal force accting on the foot.
+                float
+                    magnitude of the normmal force on the foot.
+
+                float
+                    Friction coeficient between the foot and the terrain.
+
+                numpy.array, shape (3,)
+                    direction of the normal force accting on the foot.
         """
         contact_force  = np.array([0,0,0]) 
         friction_force = np.array([0,0,0]) 
@@ -271,24 +228,25 @@ class simulation:
                 x_o: float, optional
                     x coordintate of the robot initial position (In the world frame).
                     Default: 0.0
+
                 y_o: float, optional
                     y coordintate of the robot initial position (In the world frame).
                     Default: 0.0
+
                 fix_robot_base: bool, optional
                     [TODO]
                     Default: False
-                
         """
         # Create terrain object
         terrain_shape = self.p.createCollisionShape(
             shapeType = self.p.GEOM_HEIGHTFIELD, 
-            meshScale = self.mesh_scale,
+            meshScale = MESH_SCALE,
             fileName  = self.terrain_file, 
             heightfieldTextureScaling=128
         )
         self.terrain = p.createMultiBody(0, terrain_shape)
         self.p.resetBasePositionAndOrientation(self.terrain, [0,0,0], [0,0,0,1])
-        self.p.setGravity(*self.gravity_vector)
+        self.p.setGravity(*GRAVITY_VECTOR)
 
         # Get difference between terrain array and real terrain
         ray_info = self.p.rayTest((0, 0, -50),(0, 0, 50))[0]
@@ -322,7 +280,7 @@ class simulation:
             )
 
         # Torque sensors are enable on the quadruped toes
-        for toe_id in self.toes_ids:
+        for toe_id in TOES_IDS:
             self.p.enableJointForceTorqueSensor(
                 bodyUniqueId = self.quadruped,
                 jointIndex   = toe_id,
@@ -336,10 +294,12 @@ class simulation:
             Arguments:
             ----------
                 terrain_file: str, optional
-                    Path to the .txt file representing the terrain. If None, then 
+                    Path to the .txt file representing the terrain.
+
                 x_o: float, optional
                     x coordintate of the robot initial position (In the world frame).
                     Default: 0.0
+                    
                 y_o: float, optional
                     y coordintate of the robot initial position (In the world frame).
                     Default: 0.0
@@ -366,7 +326,7 @@ class simulation:
             ---------
                 joint_target_positions: List[float], shape (12,)
                     Quadruped joints desired angles. 
-                    The order is the same as for the robot actuated_joints_ids.
+                    The order is the same as for the robot joints_ids.
                     The order should be as follows:
                         'motor_front_left_hip' 
                         'motor_front_left_upper_leg'// "Front left thigh"
@@ -389,7 +349,7 @@ class simulation:
         try:
             self.p.setJointMotorControlArray(
                 bodyUniqueId = self.quadruped,
-                jointIndices = self.actuated_joints_ids,
+                jointIndices = JOINTS_IDS,
                 controlMode  = self.p.POSITION_CONTROL,
                 targetPositions = joint_target_positions,
             )
@@ -433,7 +393,7 @@ class simulation:
         self.toes_contact_states = np.zeros([4], dtype=int)
         self.foot_ground_friction_coefficients = np.zeros([4])
         
-        for i, toe_id in enumerate(self.toes_ids):
+        for i, toe_id in enumerate(TOES_IDS):
             # Privileged information
             toe_contact_info = self.p.getContactPoints(
                 bodyA = self.quadruped, 
@@ -464,7 +424,7 @@ class simulation:
         """
         self.thighs_contact_states = np.zeros([4], dtype=np.int)
 
-        for i, thigh_id in enumerate(self.thighs_ids):
+        for i, thigh_id in enumerate(THIGHS_IDS):
             thigh_contact_info = self.p.getContactPoints(
                 bodyA  = self.quadruped, 
                 bodyB = self.terrain, 
@@ -477,7 +437,7 @@ class simulation:
             Updates the contact info for each shank for the current simulation step.
         """
         self.shanks_contact_states = np.zeros([4], dtype=np.int)
-        for i, shank_id in enumerate(self.shanks_ids):
+        for i, shank_id in enumerate(SHANKS_IDS):
             shank_contact_info = self.p.getContactPoints(
                 bodyA  = self.quadruped, 
                 bodyB = self.terrain, 
@@ -492,7 +452,7 @@ class simulation:
         # 9 scan points around each toe
         self.height_scan_at_each_toe = np.zeros([4, 9]) 
         for i, toe_link_state in enumerate(
-            self.p.getLinkStates(self.quadruped, self.toes_ids)
+            self.p.getLinkStates(self.quadruped, TOES_IDS)
             ):
             toe_link_state =  LinkState(*toe_link_state)
             toe_orientation = toe_link_state.linkWorldOrientation
@@ -517,7 +477,7 @@ class simulation:
 
         for i, toe_joint_state in enumerate(self.p.getJointStates(
                 bodyUniqueId = self.quadruped, 
-                jointIndices = self.toes_ids
+                jointIndices = TOES_IDS
             )):
             toe_joint_state = JointState(*toe_joint_state) 
             # "Analog" toe force sensor
@@ -538,7 +498,7 @@ class simulation:
         
         for i, j_state in enumerate(self.p.getJointStates(
                 bodyUniqueId = self.quadruped,
-                jointIndices = self.actuated_joints_ids
+                jointIndices = JOINTS_IDS
             )):
             j_state = JointState(*j_state)
             self.joint_angles[i] = j_state.jointPosition
@@ -605,20 +565,20 @@ class simulation:
                 friction_coefficient: float
                     The desired friction coeficient to be set on the quadruped toes.
         """
-        for toe_id in self.toes_ids:
+        for toe_id in TOES_IDS:
             self.p.changeDynamics(self.quadruped, toe_id, 
             lateralFriction = friction_coefficient)
 
-    def draw_reference_frame(self, R: np.ndarray, p: np.ndarray, scaling: float=0.05):
+    def draw_reference_frame(self, R: np.array, p: np.array, scaling: float=0.05):
         """
             Draws debug lines of a refrence frame represented by the rotation R and 
             the position vector p, in the world frame.
 
             Arguments:
             ----------
-                R: numpy.ndarray, shape (3,3)
+                R: numpy.array, shape (3,3)
                     Rotation matrix
-                p: numpy.ndarray, shape (3,) 
+                p: numpy.array, shape (3,) 
                     Position vector
                 scaling: float, optional
                     [TODO]
@@ -691,18 +651,18 @@ class simulation:
         for i in range(1):
             
             hip_link_state = LinkState(*self.p.getLinkState(self.quadruped,  
-            self.hips_ids[i]))
+            HIPS_IDS[i]))
             
             hip_position = np.array(hip_link_state.worldLinkFramePosition)
 
             thigh_position = np.array(self.p.getLinkState(self.quadruped,  
-            self.thighs_ids[i])[4])
+            THIGHS_IDS[i])[4])
             
             shank_position = np.array(self.p.getLinkState(self.quadruped,  
-            self.shanks_ids[i])[4])
+            SHANKS_IDS[i])[4])
             
             toe_position = np.array(self.p.getLinkState(self.quadruped,  
-            self.toes_ids[i])[4])
+            TOES_IDS[i])[4])
 
             self.p.addUserDebugLine(thigh_position, hip_position,
             (0, 0.5, 0.5), lifeTime = 0)
@@ -862,7 +822,7 @@ class simulation:
                 print(self.foot_ground_friction_coefficients)
 
             if t%120 == 0:
-                for toe_id in self.toes_ids:
+                for toe_id in TOES_IDS:
                     self.p.changeDynamics(self.quadruped, toe_id, 
                                             lateralFriction = friction)
                 print('friction = ', friction)
@@ -887,9 +847,9 @@ class simulation:
         
         self.update_sensor_output()
         hip_position = np.array(self.p.getLinkState(self.quadruped,  
-                                self.hips_ids[0])[4]) 
+                                HIPS_IDS[0])[4]) 
         toe_position = np.array(self.p.getLinkState(self.quadruped,  
-                                self.toes_ids[0])[4])
+                                TOES_IDS[0])[4])
         print("r_o = ", toe_position - hip_position)
         self.draw_link_position_lines()
         print(self.joint_angles * 180/np.pi)
@@ -909,11 +869,11 @@ class simulation:
                 for i in range(4):
                     
                     hip_position = np.array(self.p.getLinkState(self.quadruped,  
-                                            self.hips_ids[i])[4]) 
+                                            HIPS_IDS[i])[4]) 
                     self.trace_line(hip_position, 
                                     hip_position + objective_position, t = 0) 
                     r_o = np.array(self.p.getLinkState(self.quadruped,  
-                                        self.toes_ids[i])[4])
+                                        TOES_IDS[i])[4])
                     self.meassure_distance(r_o, hip_position + \
                                             objective_position, t=0)
                     self.get_Hi_to_leg_base_transformation_matrices()
@@ -930,7 +890,7 @@ class simulation:
             joint_target_positions = []    
             for i in range(4):  
                 hip_position = np.array(self.p.getLinkState(self.quadruped,  
-                                                    self.hips_ids[i])[4]) 
+                                                    HIPS_IDS[i])[4]) 
   
                 if i%2==0: 
                     leg_angles = solve_leg_IK("LEFT", objective_position)                                       
@@ -980,7 +940,7 @@ class simulation:
                 
                 for i in range(4):
                     r_Hip = np.array(self.p.getLinkState(self.quadruped, 
-                            self.hips_ids[i])[4])
+                            HIPS_IDS[i])[4])
                     
                     r_o = target_foot_positions[i]
                     T = T_list[i]
@@ -1016,7 +976,6 @@ if __name__ == '__main__':
     terrain_file = "../test_terrains/test_terrain.txt" 
 
     sim = simulation(terrain_file, spot_urdf_file, p,
-                gravity_vector = np.array([0, 0, -9.81]),
                 self_collision_enabled=False)
     
     sim.initialize(fix_robot_base=True) 
