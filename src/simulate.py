@@ -7,6 +7,7 @@
     the spot-mini through ROS topics.
 """
 # Utilities
+import json
 import pathlib
 import argparse
 import numpy as np
@@ -22,31 +23,33 @@ from src.simulation import simulation
 from src.terrain_gen import terrain_gen
 from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data, text, timestep
 
-# Rate messages for second
-RATE   = 10
-# Terrain dimensions
-ROWS   = 500
-COLS   = 500
-# Inicial position
-X_INIT = 0.0
-Y_INIT = 0.0
 
-def run_simulation(
-        sim: simulation, 
-        steps_per_real_second: int, 
-        sim_seconds_per_step: float
-    ):
+# Cargamos las variables de entorno
+with open('.env.json', 'r') as f:
+    ENV = json.load(f)
+# Obtenemos las constantes necesarias
+STEPS_PER_REAL_SECOND = ENV["SIMULATION"]["STEPS_PER_REAL_SECOND"]
+SIM_SECONDS_PER_STEP  = ENV["SIMULATION"]["SIM_SECONDS_PER_STEP"]
+ROWS                  = ENV["SIMULATION"]["ROWS"]
+COLS                  = ENV["SIMULATION"]["COLS"]
+X_INIT                = ENV["SIMULATION"]["X_INIT"]
+Y_INIT                = ENV["SIMULATION"]["Y_INIT"]
+QUEUE_SIZE            = ENV["ROS"]["QUEUE_SIZE"]
+
+step = 0
+
+def run_simulation(sim: simulation):
     """ Run the simulation. """
     print('\n\033[1;36m[i]\033[0m Simulation is runing!')
-    rate = rospy.Rate(steps_per_real_second) 
-    p.setTimeStep(sim_seconds_per_step)
+    rate = rospy.Rate(STEPS_PER_REAL_SECOND) 
+    p.setTimeStep(SIM_SECONDS_PER_STEP)
 
     # Use the following variables to monitor the number of updates per second.
     begin = time()
-    step = 0
+    global step
 
     try:
-        pub = rospy.Publisher('timestep', timestep, queue_size=RATE)
+        pub = rospy.Publisher('timestep', timestep, queue_size=QUEUE_SIZE)
 
         while True: 
             sim.p.stepSimulation()
@@ -59,7 +62,7 @@ def run_simulation(
 
             # Create message
             msg = timestep() 
-            msg.timestep = step * sim_seconds_per_step
+            msg.timestep = step * SIM_SECONDS_PER_STEP
             pub.publish(msg)
             
             rate.sleep()
@@ -67,33 +70,32 @@ def run_simulation(
     except rospy.ROSInterruptException:
         print('\033[1;93m[w]\033[0m Topic "timestep" was stopped.')
 
-def update_sensors(
-        steps_per_real_second: int, 
-        data_name: str, 
-        update_function: Callable
-    ):
+def update_sensors(data_name: str, update_function: Callable):
     """ Keeps a robot sensor up to date. """
     print(f'\033[1;36m[i]\033[0m Updating {data_name}.')
-    rate = rospy.Rate(steps_per_real_second) 
+    rate = rospy.Rate(STEPS_PER_REAL_SECOND) 
+
     while True: 
-        try: update_function()
+        try: 
+            update_function()
         except p.error as e: 
             print(f'\033[1;93m[w]\033[0m Warning: {e}')
             sleep(1)
+
         rate.sleep()
 
-def normal_data_publisher(sim: simulation, steps_per_real_second: float):
+def normal_data_publisher(sim: simulation):
     """
         Function in charge of publishing through a ROS topic the normal data from
         simulation.
     """
     try:
         # Init node
-        pub = rospy.Publisher('normal_data', normal_data, queue_size=RATE)
+        pub = rospy.Publisher('normal_data', normal_data, queue_size=QUEUE_SIZE)
 
         # Run until manually stopped
         print('\033[1;36m[i]\033[0m Topic "normal_data" is running!')
-        rate = rospy.Rate(steps_per_real_second) 
+        rate = rospy.Rate(STEPS_PER_REAL_SECOND) 
         while not rospy.is_shutdown():
             # Create message
             msg = normal_data()
@@ -115,7 +117,9 @@ def normal_data_publisher(sim: simulation, steps_per_real_second: float):
             msg.joint_velocities  = list(sim.joint_velocities)
 
             # Tranformation matrices
-            msg.transf_matrix  = list(np.reshape(sim.transformation_matrices, -1))
+            msg.transf_matrix     = list(np.reshape(sim.transformation_matrices, -1))
+
+            msg.foot_target       = list(np.reshape(sim.foot_target, -1))
 
             # Publish
             pub.publish(msg)
@@ -124,18 +128,18 @@ def normal_data_publisher(sim: simulation, steps_per_real_second: float):
     except rospy.ROSInterruptException:
         print('\033[1;93m[w]\033[0m Topic "normal_data" was stopped.')
 
-def priviliged_data_publisher(sim: simulation, steps_per_real_second: float):
+def priviliged_data_publisher(sim: simulation):
     """
         Function in charge of publishing through a ROS topic the priviliged data from 
         simulation.
     """
     try:
         # Init node
-        pub = rospy.Publisher('priviliged_data', priviliged_data, queue_size=RATE)
+        pub = rospy.Publisher('priviliged_data', priviliged_data, queue_size=QUEUE_SIZE)
 
         # Run until manually stopped
         print('\033[1;36m[i]\033[0m Topic "priviliged_data" is running!')
-        rate = rospy.Rate(steps_per_real_second) 
+        rate = rospy.Rate(STEPS_PER_REAL_SECOND) 
         while not rospy.is_shutdown():
             # Create message
             msg = priviliged_data()
@@ -188,6 +192,9 @@ def reset_simulation_subscriber(sim: simulation):
             if data.text == '': terrain_file = sim.terrain_file 
             else: terrain_file = data.text 
             sim.reset(terrain_file, X_INIT, Y_INIT) 
+
+            global step
+            step = 0
 
         rospy.Subscriber("reset_simulation", text, reset)
         print('\033[1;36m[i]\033[0m Topic "reset_simulation" is running!')
@@ -285,20 +292,6 @@ if __name__ == '__main__':
         help='Path to the URDF file of the quadruped robot.',
         metavar='PATH'
     )
-    parser.add_argument(
-        '--steps-per-real-second',
-        type=int,
-        default='100',
-        help='Simulation steps per real second.',
-        metavar='STEPS'
-    )
-    parser.add_argument(
-        '--sim-seconds-per-step',
-        type=float,
-        default='0.01',
-        help='Simulation seconds for step.',
-        metavar='SECONDS'
-    )
 
     args = parser.parse_args()
 
@@ -356,8 +349,7 @@ if __name__ == '__main__':
     rospy.init_node('simulation', anonymous=True)
 
     # Thread that runs the simulation
-    th_args = (sim, args.steps_per_real_second, args.sim_seconds_per_step)
-    sim_th = Thread(target=run_simulation, args=th_args)
+    sim_th = Thread(target=run_simulation, args=(sim,))
     sim_th.daemon = True
     sim_th.start()
 
@@ -373,20 +365,21 @@ if __name__ == '__main__':
         (sim.update_height_scan, 'heigh scan'),
         (sim.update_toes_force, 'toes force'),
         (sim.update_joints_sensors, 'joints'),
-        (sim.update_transformation_matrices, 'transformation matrices')
+        (sim.update_transformation_matrices, 'transformation matrices'),
+        (sim.update_foot_target, 'foot target')
     }
 
     for f, data in update_functions:
         sensores_ths.append(Thread(
             target=update_sensors, 
-            args=(args.steps_per_real_second, data, f)
+            args=(data, f)
         ))
     for th in sensores_ths: 
         th.daemon = True
         th.start()
 
     # Thread that publish the value of each sensor in ROS.
-    pub_args = (sim, args.steps_per_real_second)
+    pub_args = (sim,)
     pub_th = Thread(target=normal_data_publisher, args=pub_args)
     pub_th.daemon = True
     pub_th.start()

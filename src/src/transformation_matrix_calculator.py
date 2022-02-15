@@ -4,7 +4,17 @@
 
     [TODO: DESCRIPTION]
 """
+import json
 import numpy as np
+from typing import *
+
+
+# Cargamos las variables de entorno
+with open('.env.json', 'r') as f:
+    ENV = json.load(f)
+# Obtenemos las constantes necesarias
+LEG_SPAN = ENV["ROBOT"]["LEG_SPAN"]
+H_OFF    = ENV["ROBOT"]["H_OFF"]
 
 
 def euler_angles_to_rotation_matrix(theta) :
@@ -13,12 +23,12 @@ def euler_angles_to_rotation_matrix(theta) :
 
         Arguments:
         ----------
-            theta: numpy.ndarray, shape(3,)
+            theta: numpy.array, shape(3,)
                 Euler angles. (roll, pitch, yaw)
         
         Return:
         -------
-            numpy.ndarray, shape(3,3)
+            numpy.array, shape(3,3)
                 Rotation matrix.
     """
     
@@ -44,28 +54,18 @@ def euler_angles_to_rotation_matrix(theta) :
 
     return np.dot(R_z, np.dot( R_y, R_x ))
 
-def get_leg_to_horizontal_frame_transformations(
-        base_rpy:np.ndarray,
-        leg_span:float = 0.2442,
-        leg_offset:float = 0.063
-    ):
+def get_leg_to_horizontal_frame_transformations(base_rpy: np.array) -> List[np.array]:
     """
         Returns the transformation matrices from the hip to the leg base.
     
         Arguments:
         ---------
-            base_rpy: numpy.ndarray, shape(3,) 
+            base_rpy: numpy.array, shape(3,) 
                 The hip's (and robot base) euler angles. (roll, pitch, yaw)
-            robot_width: float
-                The robot's width (in meters) from hip to hip (left hip to right hip).
-            robot_lenght: float
-                The robot's lenght (in meters) from hip to hip (front hip to rear hip).
-            leg_span: float
-                Distance of the extended leg.
 
         Returns:
         --------
-            List[np.array], shape (4,4). 
+            List[numpy.array], shape (4,4). 
                 A list containing the transformation matrices from the hip to the leg 
                 base, for each of the robots legs.
     """
@@ -77,7 +77,7 @@ def get_leg_to_horizontal_frame_transformations(
 
     for i in range(4):
         # We calculate the Hi frame  relative to the leg base position (hip)
-        p_li_hi = np.array([0,  leg_offset * (-1)**i,  -leg_span])
+        p_li_hi = np.array([0, H_OFF * (-1)**i, -LEG_SPAN])
         # We do the same for the leg base orientation
         R_li_Hi = euler_angles_to_rotation_matrix([base_roll, base_pitch, 0])
 

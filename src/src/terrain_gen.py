@@ -4,18 +4,25 @@
 
     File containing the code in charge of the automatic generation of simulated terrain.
 """
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import *
 from random import uniform
 from perlin_noise import PerlinNoise
 
+
+# Cargamos las variables de entorno
+with open('.env.json', 'r') as f:
+    ENV = json.load(f)
+# Obtenemos las constantes necesarias
+STEPS_FREQUENCY   = ENV["SIMULATION"]["STEPS_FREQUENCY"]
+STEPS_NOISE       = ENV["SIMULATION"]["STEPS_NOISE"]
+ZONE_STAIRS_WIDTH = ENV["SIMULATION"]["ZONE_STAIRS_WIDTH"]
+
+
 class terrain_gen:
     """ Class that allows the generation of terrains for the simulation environment. """
-    STEPS_FREQUENCY   = 10
-    STEPS_NOISE       = 0.05
-    ZONE_STAIRS_WIDTH = 25
-
     @staticmethod
     def terrain(rows: int, cols: int) -> np.ndarray:
         """
@@ -268,14 +275,14 @@ class terrain_gen:
         """
         # Generate the terrain
         terrain = cls.terrain(rows, cols)
-        p_noise = PerlinNoise(octaves=cls.STEPS_FREQUENCY, seed=seed)
+        p_noise = PerlinNoise(octaves=STEPS_FREQUENCY, seed=seed)
 
         # Calculate the Perlin noise
         noise = np.zeros((rows, cols))
         for i in range(0, rows, width):
             for j in range(0, cols, width):
                 noise[i][j] = p_noise([i/rows, j/cols]) 
-                noise[i][j] += uniform(-cls.STEPS_NOISE, cls.STEPS_NOISE)
+                noise[i][j] += uniform(-STEPS_NOISE, STEPS_NOISE)
 
         # Add the blocks following the Perlin noise
         min_noise = np.min(noise)
@@ -309,29 +316,29 @@ class terrain_gen:
         terrain = cls.terrain(rows, cols)
 
         # Space occupied by the central area
-        middle_width = cls.ZONE_STAIRS_WIDTH
+        middle_width = ZONE_STAIRS_WIDTH
 
         # We divide the terrain into 5 zones: 3 flat and 2 for stairs. Calculate the
         # space occupied by the stairs
-        stair_length = (cols - 3 * cls.ZONE_STAIRS_WIDTH) // 2
-        middle_width += (cols - 3 * cls.ZONE_STAIRS_WIDTH) % 2
+        stair_length = (cols - 3 * ZONE_STAIRS_WIDTH) // 2
+        middle_width += (cols - 3 * ZONE_STAIRS_WIDTH) % 2
 
         # Calculate how many steps each stair has
         n = stair_length // width
         middle_width += 2 * (stair_length % width)
-        middle_col = cls.ZONE_STAIRS_WIDTH + n * width
+        middle_col = ZONE_STAIRS_WIDTH + n * width
 
         # Calculate the height of the central zone
         middle_height = (n - 1) * height
 
         # Generate the stairs
-        cls.stair(terrain, 0, cls.ZONE_STAIRS_WIDTH, 'E', rows, width, height, n)
+        cls.stair(terrain, 0, ZONE_STAIRS_WIDTH, 'E', rows, width, height, n)
         cls.stair(terrain, 0, middle_col + middle_width, 'E', rows, width, height, n)
 
         # Generate the central zone
         cls.step(terrain, 0, middle_col, rows, cols, middle_height)
         # Generate the final zone
-        cls.step(terrain, 0, cols - cls.ZONE_STAIRS_WIDTH, rows, cols, (n - 1) * height)
+        cls.step(terrain, 0, cols - ZONE_STAIRS_WIDTH, rows, cols, (n - 1) * height)
 
         return terrain
 

@@ -9,18 +9,26 @@ from typing import *
 from abc import abstractmethod
 
 # Machine Learning
-import tensorflow as tf
+import numpy as np
 from tcn import TCN
 from tensorflow import keras
 from tensorflow.keras import layers
+
+
+# Cargamos las variables de entorno
+with open('.env.json', 'r') as f:
+    ENV = json.load(f)
+# Obtenemos las constantes necesarias
+HISTORY_LEN  = ENV["NEURAL_NETWORK"]["HISTORY_LEN"]
+
 
 class controller_neural_network:
     """
         [TODO]
     """
-    NORMAL_DATA_SHAPE         = 48
+    NORMAL_DATA_SHAPE         = 60
     NON_PRIVILIGED_DATA_SHAPE = 121
-    PRIVILIGED_DATA_SHAPE     = 71
+    PRIVILIGED_DATA_SHAPE     = 59
     CLASSIFIER_INPUT_SHAPE    = 64 + NORMAL_DATA_SHAPE 
 
     @abstractmethod
@@ -62,6 +70,9 @@ class teacher_nn(controller_neural_network):
         outputs = self.classifier(concat)
         self.model = keras.Model([inputs_x_t, inputs_o_t], outputs)
 
+    def predict(self, input_x_t, input_o_t) -> np.array:
+        return self.model.predict([input_x_t, input_o_t])
+
 class student_nn(controller_neural_network):
     """
         [TODO]
@@ -77,13 +88,11 @@ class student_nn(controller_neural_network):
                 howpublished = {\ url{https://github.com/philipperemy/keras-tcn}},
             }
     """
-    INPUT_LENGTH = 100
-
     def __init__(self, teacher: teacher_nn):
         # TCN network
-        inputs_h_t = keras.Input(shape=(None, self.INPUT_LENGTH, self.NORMAL_DATA_SHAPE))
+        inputs_h_t = keras.Input(shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE))
         h_t = TCN(
-            input_shape=(None, self.INPUT_LENGTH, self.NORMAL_DATA_SHAPE),
+            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE),
             nb_filters=self.NORMAL_DATA_SHAPE,
             kernel_size=5,
             dilatations=(1,),
@@ -91,7 +100,7 @@ class student_nn(controller_neural_network):
             return_sequences=True
         )(inputs_h_t)
         h_t = TCN(
-            input_shape=(None, self.INPUT_LENGTH, self.NORMAL_DATA_SHAPE),
+            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE),
             nb_filters=self.NORMAL_DATA_SHAPE // 2,
             kernel_size=5,
             dilatations=(1,),
@@ -99,7 +108,7 @@ class student_nn(controller_neural_network):
             return_sequences=True
         )(h_t)
         h_t = TCN(
-            input_shape=(None, self.INPUT_LENGTH, self.NORMAL_DATA_SHAPE // 2),
+            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE // 2),
             nb_filters=self.NORMAL_DATA_SHAPE // 2,
             kernel_size=5,
             dilatations=(2,),
@@ -107,7 +116,7 @@ class student_nn(controller_neural_network):
             return_sequences=True
         )(h_t)
         h_t = TCN(
-            input_shape=(None, self.INPUT_LENGTH, self.NORMAL_DATA_SHAPE // 2),
+            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE // 2),
             nb_filters=self.NORMAL_DATA_SHAPE // 4,
             kernel_size=5,
             dilatations=(2,),
@@ -115,7 +124,7 @@ class student_nn(controller_neural_network):
             return_sequences=True
         )(h_t)
         h_t = TCN(
-            input_shape=(None, self.INPUT_LENGTH, self.NORMAL_DATA_SHAPE // 4),
+            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE // 4),
             nb_filters=self.NORMAL_DATA_SHAPE // 4,
             kernel_size=5,
             dilatations=(4,),
@@ -123,7 +132,7 @@ class student_nn(controller_neural_network):
             return_sequences=True
         )(h_t)
         h_t = TCN(
-            input_shape=(None, self.INPUT_LENGTH, self.NORMAL_DATA_SHAPE // 4),
+            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE // 4),
             nb_filters=self.NORMAL_DATA_SHAPE // 8,
             kernel_size=5,
             dilatations=(2,),

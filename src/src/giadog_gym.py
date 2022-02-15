@@ -21,9 +21,26 @@ from src.terrain_gen import *
 from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data, text, timestep
 
 # Controller
-#from src.neural_networks import *
+from src.neural_networks import *
 from src.inverse_kinematics import *
 from src.foot_trajectory_generator import *
+
+
+# Cargamos las variables de entorno
+with open('.env.json', 'r') as f:
+    ENV = json.load(f)
+# Obtenemos las constantes necesarias
+QUEUE_SIZE      = ENV["ROS"]["QUEUE_SIZE"]
+GOAL_RADIUS_2   = ENV["TRAIN"]["GOAL_RADIUS"] ** 2
+MAX_ITER_TIME   = ENV["TRAIN"]["MAX_ITERATION_TIME"]
+MIN_DESIRED_VEL = ENV["TRAIN"]["MIN_DESIRED_VEL"]
+BASE_FREQ       = ENV["ROBOT"]["BASE_FREQUENCY"]
+VEL_TH          = ENV["PHYSICS"]["VELOCITY_THRESHOLD"]
+SWIGN_PH        = ENV["PHYSICS"]["SWING_PHASE"]
+GRAVITY_VECTOR  = ENV["PHYSICS"]["GRAVITY_VECTOR"]
+TERRAIN_FILE    = ENV["SIMULATION"]["TERRAIN_FILE"]
+HISTORY_LEN     = ENV["NEURAL_NETWORK"]["HISTORY_LEN"]
+
 
 class teacher_giadog_env(gym.Env):
     """
@@ -57,34 +74,63 @@ class teacher_giadog_env(gym.Env):
         --------------------
             (TODO)
     """
-    QUEUE_SIZE = 10
-    VEL_TH   = 0.6 # Velocity threshold
-    SWIGN_PH = 0   # Swign phase
-    TERRAIN_FILE = 'gym_terrain.txt'
-    HISTORY_LEN = 100
     FOOT_HISTORY_LEN = 3
+    JOINT_VEL_HISTORY_LEN = 2
+    JOINT_ERR_HISTORY_LEN = 2
+    NON_PRIVILIGED_DATA = {
+        'target_dir',
+        'turn_dir',
+        'gravity_vector',
+        'angular_vel',
+        'linear_vel',
+        'joint_angles',
+        'joint_vels',
+        'ftg_phases',
+        'ftg_freqs',
+        'base_freq',
+        'joint_err_hist',
+        'joint_vel_hist',
+        'foot_target_hist',
+        'toes_contact',
+        'thighs_contact',
+        'shanks_contact'
+    }
+    PRIVILIGED_DATA = {
+        'normal_foot',
+        'height_scan',
+        'foot_forces',
+        'foot_friction',
+        'external_force'
+    }
 
     # ROS publisher node that update the spot mini joints
     reset_pub = rospy.Publisher('reset_simulation', text, queue_size=QUEUE_SIZE)
     # ROS publisher node that update the spot mini joints
     joints_pub = rospy.Publisher('spot_joints', joint_angles, queue_size=QUEUE_SIZE)
 
+
     def __init__(self):
         self.observation_space = spaces.Dict({
             # Non-priviliged Space
+            'target_dir': spaces.Box(
+                low = -np.inf * np.ones((2,)), 
+                high = np.inf * np.ones((2,)),
+                dtype = np.float32
+            ),
+            'turn_dir': spaces.Discrete(3, start=-1),
             'gravity_vector': spaces.Box(
-                low = -20 * np.ones((3,)), 
-                high = np.zeros((3,)),
+                low = -np.inf * np.ones((3,)), 
+                high = np.inf * np.ones((3,)),
                 dtype = np.float32
             ),
             'angular_vel': spaces.Box(
-                low = -5 * np.ones((3,)), 
-                high = 5 * np.ones((3,)),
+                low = -np.inf * np.ones((3,)), 
+                high = np.inf * np.ones((3,)),
                 dtype = np.float32
             ),
             'linear_vel': spaces.Box(
-                low = -5 * np.ones((3,)), 
-                high = 5 * np.ones((3,)),
+                low = -np.inf * np.ones((3,)), 
+                high = np.inf * np.ones((3,)),
                 dtype = np.float32
             ),
             'joint_angles': spaces.Box(
@@ -93,33 +139,68 @@ class teacher_giadog_env(gym.Env):
                 dtype = np.float32
             ),
             'joint_vels': spaces.Box(
-                low = -5 * np.pi * np.ones((3,)), 
-                high = 5 * np.pi * np.ones((3,)),
+                low = -np.inf * np.ones((12,)), 
+                high = np.inf * np.ones((12,)),
                 dtype = np.float32
+            ),
+            'ftg_phases': spaces.Box(
+                low = -np.ones((8,)),
+                high = np.ones((8,)),
+                dtype = np.float32
+            ),
+            'ftg_freqs': spaces.Box(
+                low = -np.inf * np.ones((4,)), 
+                high = np.inf * np.ones((4,)),
+                dtype = np.float32
+            ),
+            'base_freq': spaces.Box(
+                low = -np.inf,
+                high = np.inf,
+                dtype = np.float
+            ),
+            'joint_err_hist': spaces.Box(
+                low = np.zeros((self.JOINT_ERR_HISTORY_LEN, 12)),
+                high = 2 * np.pi * np.ones((self.JOINT_ERR_HISTORY_LEN, 12)),
+                dtype = np.float
+            ),
+            'joint_vel_hist': spaces.Box(
+                low = -np.inf * np.ones((self.JOINT_VEL_HISTORY_LEN, 12)),
+                high = np.inf * np.ones((self.JOINT_VEL_HISTORY_LEN, 12)),
+                dtype = np.float
+            ),
+            'foot_target_hist': spaces.Box(
+                low = -np.inf * np.ones((self.FOOT_HISTORY_LEN, 4, 3)),
+                high = np.inf * np.ones((self.FOOT_HISTORY_LEN, 4, 3)),
+                dtype = np.float
             ),
             'toes_contact': spaces.MultiBinary(4),
             'thighs_contact': spaces.MultiBinary(4),
             'shanks_contact': spaces.MultiBinary(4),
 
-            # Priviliged Space
+            # Priviliged Space 
             'normal_foot': spaces.Box(
-                low = -10 * np.ones((4, 3)), 
-                high = 10 * np.ones((4, 3)),
+                low = -np.inf * np.ones((4, 3)), 
+                high = np.inf * np.ones((4, 3)),
                 dtype = np.float32
             ), 
             'height_scan': spaces.Box(
-                low = -50 * np.ones((4, 9)), 
-                high = 50 * np.ones((4, 9)),
+                low = -np.inf * np.ones((4, 9)), 
+                high = np.inf * np.ones((4, 9)),
                 dtype = np.float32
             ), 
             'foot_forces': spaces.Box(
-                low = -10 * np.ones((4,)), 
-                high = 10 * np.ones((4,)),
+                low = -np.inf * np.ones((4,)), 
+                high = np.inf * np.ones((4,)),
                 dtype = np.float32
             ), 
             'foot_friction': spaces.Box(
-                low = -2 * np.ones((4,)), 
-                high = 2 * np.ones((4,)),
+                low = -np.inf * np.ones((4,)), 
+                high = np.inf * np.ones((4,)),
+                dtype = np.float32
+            ),
+            'foot_friction': spaces.Box(
+                low = -np.inf * np.ones((3,)), 
+                high = np.inf * np.ones((3,)),
                 dtype = np.float32
             )
         })
@@ -128,7 +209,6 @@ class teacher_giadog_env(gym.Env):
             high = float('inf') * np.ones((16,)),
             dtype = np.float32
         )
-        self.gravity_vector = np.array([0, 0, -9.807])
 
         normal_data_sub = message_filters.Subscriber(
             'normal_data', 
@@ -144,16 +224,24 @@ class teacher_giadog_env(gym.Env):
         )
         ts = message_filters.ApproximateTimeSynchronizer(
             [timestep_sub, normal_data_sub, priviliged_data_sub], 
-            queue_size=self.QUEUE_SIZE,
+            queue_size=QUEUE_SIZE,
             slop=0.1,
             allow_headerless=True
         )
         ts.registerCallback(self.__update_obs)
 
-        #self.H = np.zeros((self.HISTORY_LEN, controller_neural_network.NORMAL_DATA_SHAPE))
+        self.H = np.zeros((HISTORY_LEN, controller_neural_network.NORMAL_DATA_SHAPE))
         self.foot_target_hist = np.zeros((self.FOOT_HISTORY_LEN, 4, 3))
-        #self.model = teacher_nn()
-    
+        self.joint_vel_hist = np.zeros((self.JOINT_VEL_HISTORY_LEN, 12))
+        self.joint_err_hist = np.zeros((self.JOINT_ERR_HISTORY_LEN, 12))
+        self.ftg_phases = np.zeros((8,))
+        self.ftg_freqs = np.zeros((4,))
+        self.base_freq = BASE_FREQ
+        self.gravity_vector = GRAVITY_VECTOR
+        self.E_v = []
+
+        self.model = teacher_nn()
+
     def __actuate_joints(cls, joint_target_positions: List[float]):
         """
             Moves the robot joints to a given target position.
@@ -208,55 +296,43 @@ class teacher_giadog_env(gym.Env):
         # Zero command
         zero = not (self.target_dir[0] or self.target_dir[1])
 
-        linear_vel = np.asarray(
-            [self.linear_vel[0], self.linear_vel[1]], 
-            dtype=np.float32
-        )
+        linear_vel = self.linear_vel[:2]
         # Base horizontal linear velocity projected onto the command direction.
-        proj_linear_vel = np.dot(linear_vel, self.target_dir)
+        proj_linear_vel = np.dot(linear_vel, self.command_dir)
         # Velocity orthogonal to the target direction.
-        ort_vel = (linear_vel - proj_linear_vel * self.target_dir) \
+        ort_vel = (linear_vel - proj_linear_vel * self.command_dir) \
             if zero else linear_vel
         ort_vel = np.linalg.norm(ort_vel)
 
         # Base horizontal angular velocity.
-        h_angular_vel = np.asarray(
-            [self.angular_vel[0], self.angular_vel[1]],
-            dtype=np.float32
-        )
+        h_angular_vel = self.angular_vel[:2]
         # Base angular velocity Z projected onto desired angular velocity.
         proj_angular_vel = self.angular_vel[2] * self.turn_dir
 
         # Set of such collision-free feet and index set of swing legs
         count_swing = 0
-        foot_clear = 4
+        foot_clear = 0
         for i in range(4):
             # If i-th foot is in swign phase.
-            if ftg_freqs[i] >= self.SWIGN_PH:
+            if ftg_freqs[i] >= SWIGN_PH:
                 count_swing += 1
 
                 # Verify that the height of the i-th foot is greater than the height of 
                 # the surrounding terrain
-                for height in self.height_scan[i]:
-                    if self.foot_target_hist[0][i][2] <= height:
-                        foot_clear -= 1
-                        break
+                foot_clear += all(height < 0 for height in self.height_scan[i])
 
         # ======================= REWARDS ======================= #
         # Linear Velocity Reward
         if zero:
             r_lv = 0
-        elif proj_linear_vel < self.VEL_TH:
-            r_lv = np.exp(-2 * (proj_linear_vel - self.VEL_TH) ** 2)
+        elif proj_linear_vel < VEL_TH:
+            r_lv = np.exp(-2 * (proj_linear_vel - VEL_TH) ** 2)
         else:
             r_lv = 1
 
         # Angular Velocity Reward
-        r_av = 0
-        if self.turn_dir == 0:
-            r_av = 0
-        elif proj_angular_vel < self.VEL_TH:
-            r_av = np.exp(-1.5 * (proj_angular_vel - self.VEL_TH) ** 2)
+        if proj_angular_vel < VEL_TH:
+            r_av = np.exp(-1.5 * (proj_angular_vel - VEL_TH) ** 2)
         else:
             r_av = 1
 
@@ -268,15 +344,14 @@ class teacher_giadog_env(gym.Env):
         r_fc = foot_clear / count_swing if count_swing > 0 else 1
 
         # Body Collision Reward
-        r_bc = -sum(self.thighs_contact) - sum(self.shanks_contact)
+        r_bc = - sum(self.thighs_contact) - sum(self.shanks_contact)
 
         # Target Smoothness Reward
         r_fd_T = np.reshape(self.foot_target_hist, (3,-1))
         r_s = -np.linalg.norm(r_fd_T[0] - 2.0 * r_fd_T[1] + r_fd_T[2])
 
         # Torque Reward
-        r_tau = 0
-        for pos in self.joint_angles: r_tau -= abs(pos)
+        r_tau = -sum(abs(torque) for torque in self.joint_torques)
 
         return (5*r_lv + 5*r_av + 4*r_b + r_fc + 2*r_bc + 2.5*r_s) / 100.0 + 2e-5 * r_tau
 
@@ -289,19 +364,26 @@ class teacher_giadog_env(gym.Env):
         """
             Update data from ROS
         """
-        self.timestep           = time_data.timestep
+        self.timestep    = time_data.timestep
+        self.position    = n_data.position
+        self.orientation = n_data.orientation
+        self.command_dir = self.target_dir - np.array(self.position)
 
         # Non-priviliged data
-        self.position           = n_data.position
-        self.orientation        = n_data.orientation
-        self.linear_vel         = n_data.linear_vel 
-        self.angular_vel        = n_data.angular_vel 
-        self.toes_contact       = n_data.toes_contact 
-        self.thighs_contact     = n_data.thighs_contact 
-        self.shanks_contact     = n_data.shanks_contact 
-        self.joint_angles       = n_data.joint_angles 
-        self.joint_velocities   = n_data.joint_velocities  
-        self.transform_matrices = np.reshape(n_data.transf_matrix, (4,4,4))
+        self.linear_vel            = n_data.linear_vel 
+        self.angular_vel           = n_data.angular_vel 
+        self.toes_contact          = n_data.toes_contact 
+        self.thighs_contact        = n_data.thighs_contact 
+        self.shanks_contact        = n_data.shanks_contact 
+        self.joint_angles          = n_data.joint_angles 
+        N = self.JOINT_VEL_HISTORY_LEN
+        self.joint_vel_hist[1:N]   = self.joint_vel_hist[0:N-1]
+        self.joint_vel_hist[0]     = self.joint_velocities
+        self.joint_velocities      = n_data.joint_velocities  
+        self.transform_matrices    = np.reshape(n_data.transf_matrix, (4,4,4))
+        N = self.FOOT_HISTORY_LEN
+        self.foot_target_hist[1:N] = self.foot_target_hist[0:N-1]
+        self.foot_target_hist[0]   = np.reshape(n_data.foot_target, (4,3))
 
         # Priviliged data
         self.joint_torques   = p_data.joint_torques 
@@ -310,30 +392,76 @@ class teacher_giadog_env(gym.Env):
         self.toes_force2     = p_data.toes_force2     
         self.ground_friction = p_data.ground_friction 
         self.height_scan     = np.reshape(p_data.height_scan, (4,9)) 
+        self.external_force  = np.zeros((3,))
 
-    def __get_obs(self): 
+        v = int(np.array(self.linear_vel) @ self.command_dir > MIN_DESIRED_VEL)
+        self.E_v.append(v)
+
+    def __terminate(self) -> bool:
+        """
+            Check if the iteration finished
+        """
+        # We calculate the distance between the position of the robot and the target
+        d_vector = self.target_dir - np.array(self.position[:2])
+        d = d_vector @ d_vector
+
+        return d < GOAL_RADIUS_2 or self.timestep > MAX_ITER_TIME
+
+    def get_obs(self) -> Dict[str, Any]: 
+        """
+            [TODO]
+        """
         return {
             # Non-priviliged Space
-            'gravity_vector': self.gravity_vector,
-            'angular_vel'   : self.angular_vel,
-            'linear_vel'    : self.linear_vel,
-            'joint_angles'  : self.joint_angles,
-            'joint_vels'    : self.joint_velocities,
-            'toes_contact'  : self.toes_contact,
-            'thighs_contact': self.thighs_contact,
-            'shanks_contact': self.shanks_contact,
+            'target_dir'       : self.target_dir,
+            'turn_dir'         : self.turn_dir,
+            'gravity_vector'   : self.gravity_vector,
+            'angular_vel'      : self.angular_vel,
+            'linear_vel'       : self.linear_vel,
+            'joint_angles'     : self.joint_angles,
+            'joint_vels'       : self.joint_velocities,
+            'ftg_phases'       : self.ftg_phases,
+            'ftg_freqs'        : self.ftg_freqs,
+            'base_freq'        : self.base_freq,
+            'joint_err_hist'   : self.joint_err_hist,
+            'joint_vel_hist'   : self.joint_vel_hist,
+            'foot_target_hist' : self.foot_target_hist,
+            'toes_contact'     : self.toes_contact,
+            'thighs_contact'   : self.thighs_contact,
+            'shanks_contact'   : self.shanks_contact,
 
             # Priviliged Space
-            'normal_foot'  : self.normal_toe, 
-            'height_scan'  : self.height_scan, 
-            'foot_forces'  : self.toes_force1, 
-            'foot_friction': self.ground_friction
+            'normal_foot'    : self.normal_toe, 
+            'height_scan'    : self.height_scan, 
+            'foot_forces'    : self.toes_force1, 
+            'foot_friction'  : self.ground_friction,
+            'external_force' : self.external_force
         }
 
+    def predict(self, obs: Dict[str, Any]) -> np.array:
+        """
+            [TODO]
+        """
+        input_x_t = np.concat(
+            [np.reshape(obs[data],-1) for data in self.NON_PRIVILIGED_DATA]
+        )
+        input_o_t = np.concat([np.reshape(obs[data],-1) for data in self.PRIVILIGED_DATA])
+
+        return self.model.predict(input_x_t, input_o_t)
+
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, dict]:
-        target_foot_positions, _, _ = calculate_foot_trajectories(action, self.timestep)
+        """
+            Apply an action on the environment
+
+            [TODO]
+        """
+        ftg_data = calculate_foot_trajectories(action, self.timestep)
+        target_foot_positions, self.ftg_freqs, ftg_angles= ftg_data
+        ftg_phases = []
+        for angle in ftg_angles: 
+            ftg_phases += [np.sin(angle), np.cos(angle)]
+
         joints_angles = []
-        
         for i in range(4):
             r_o = target_foot_positions[i]
             T_i = self.transform_matrices[i]
@@ -345,17 +473,17 @@ class teacher_giadog_env(gym.Env):
 
         self.__actuate_joints(joints_angles)
 
-        # TODO
-        ftg_freq = [0]*4
-
-        observation = self.__get_obs()
-        reward = self.__get_reward(ftg_freq)
-        done = False # TODO
+        observation = self.get_obs()
+        reward = self.__get_reward()
+        done = self.__terminate()
         info = {}    # TODO
 
         return observation, reward, done, info
 
     def make_terrain(self, type: str, *args, **kwargs):
+        """
+            [TODO]
+        """
         # We create the terrain
         if type == 'hills': terrain = terrain_gen.hills(*args, **kwargs)
         elif type == 'steps': terrain = terrain_gen.steps(*args, **kwargs)
@@ -363,11 +491,11 @@ class teacher_giadog_env(gym.Env):
 
         # A random goal is selected
         x, y = terrain_gen.set_goal(terrain, 3)
-        self.target_dir = [x / 50 - 5, y / 50 - 5]
+        self.target_dir = np.array([x / 50 - 5, y / 50 - 5])
         self.turn_dir = randint(-1, 1)
 
         # We store the terrain in a file
-        terrain_gen.save(terrain, self.TERRAIN_FILE)
+        terrain_gen.save(terrain, TERRAIN_FILE)
 
     def reset(self, terrain_file: str=''):
         """
@@ -378,4 +506,11 @@ class teacher_giadog_env(gym.Env):
         msg.text = terrain_file
         self.reset_pub.publish(msg)
 
+        self.E_v = []
 
+    def traversability(self) -> float:
+        """
+            Calculate the current traversibility
+        """
+        if len(self.E_v) == 0: return 0
+        return sum(self.E_v) / len(self.E_v)
