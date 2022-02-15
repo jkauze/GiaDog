@@ -36,6 +36,7 @@ X_INIT                = ENV["SIMULATION"]["X_INIT"]
 Y_INIT                = ENV["SIMULATION"]["Y_INIT"]
 QUEUE_SIZE            = ENV["ROS"]["QUEUE_SIZE"]
 
+step = 0
 
 def run_simulation(sim: simulation):
     """ Run the simulation. """
@@ -45,7 +46,7 @@ def run_simulation(sim: simulation):
 
     # Use the following variables to monitor the number of updates per second.
     begin = time()
-    step = 0
+    global step
 
     try:
         pub = rospy.Publisher('timestep', timestep, queue_size=QUEUE_SIZE)
@@ -116,7 +117,9 @@ def normal_data_publisher(sim: simulation):
             msg.joint_velocities  = list(sim.joint_velocities)
 
             # Tranformation matrices
-            msg.transf_matrix  = list(np.reshape(sim.transformation_matrices, -1))
+            msg.transf_matrix     = list(np.reshape(sim.transformation_matrices, -1))
+
+            msg.foot_target       = list(np.reshape(sim.foot_target, -1))
 
             # Publish
             pub.publish(msg)
@@ -189,6 +192,9 @@ def reset_simulation_subscriber(sim: simulation):
             if data.text == '': terrain_file = sim.terrain_file 
             else: terrain_file = data.text 
             sim.reset(terrain_file, X_INIT, Y_INIT) 
+
+            global step
+            step = 0
 
         rospy.Subscriber("reset_simulation", text, reset)
         print('\033[1;36m[i]\033[0m Topic "reset_simulation" is running!')
@@ -359,7 +365,8 @@ if __name__ == '__main__':
         (sim.update_height_scan, 'heigh scan'),
         (sim.update_toes_force, 'toes force'),
         (sim.update_joints_sensors, 'joints'),
-        (sim.update_transformation_matrices, 'transformation matrices')
+        (sim.update_transformation_matrices, 'transformation matrices'),
+        (sim.update_foot_target, 'foot target')
     }
 
     for f, data in update_functions:

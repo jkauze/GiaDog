@@ -9,7 +9,7 @@ from typing import *
 from abc import abstractmethod
 
 # Machine Learning
-import tensorflow as tf
+import numpy as np
 from tcn import TCN
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -26,9 +26,9 @@ class controller_neural_network:
     """
         [TODO]
     """
-    NORMAL_DATA_SHAPE         = 48
+    NORMAL_DATA_SHAPE         = 60
     NON_PRIVILIGED_DATA_SHAPE = 121
-    PRIVILIGED_DATA_SHAPE     = 71
+    PRIVILIGED_DATA_SHAPE     = 59
     CLASSIFIER_INPUT_SHAPE    = 64 + NORMAL_DATA_SHAPE 
 
     @abstractmethod
@@ -69,6 +69,9 @@ class teacher_nn(controller_neural_network):
         # Entire network
         outputs = self.classifier(concat)
         self.model = keras.Model([inputs_x_t, inputs_o_t], outputs)
+
+    def predict(self, input_x_t, input_o_t) -> np.array:
+        return self.model.predict([input_x_t, input_o_t])
 
 class student_nn(controller_neural_network):
     """

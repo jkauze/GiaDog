@@ -18,9 +18,21 @@ if __name__ == '__main__':
         seed=randint(0, 1e6)
     )
     train_env.reset('gym_terrain.txt')
+    sleep(2)
 
-    sleep(5)
     while True:
-        print(train_env.step(np.array([0]*16))[0])
-        sleep(1)
+        done = False
+        obs = train_env.get_obs()
+        while not done:
+            # Obtenemos la accion de la politica
+            action = train_env.predict(obs)
+            # Aplicamos la accion al entorno
+            obs, reward, done, info = train_env.step(action)
+
+        tr = train_env.traversability()
+        print(f'Traversatility: {tr}')
+
+        # Reseteamos el terreno
+        train_env.reset('gym_terrain.txt')
+        sleep(2)
 

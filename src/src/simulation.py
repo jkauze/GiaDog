@@ -141,6 +141,8 @@ class simulation:
         # Transformation matrices from the hip to the leg base
         self.transformation_matrices = np.zeros((4,4,4))
 
+        self.foot_target = np.zeros((4,3))
+
     @staticmethod
     def __get_foot_height_scan_coordinates(x: float, y: float, alpha: float) -> np.array:
         """
@@ -511,6 +513,15 @@ class simulation:
         """
         self.transformation_matrices = \
             get_leg_to_horizontal_frame_transformations(self.base_rpy)
+
+    def update_foot_target(self):
+        """
+            Update the current foot target (position).
+        """
+        toes_info = self.p.getLinkStates(self.quadruped, TOES_IDS)
+        for i, toe_link_state in enumerate(toes_info):
+            toe_link_state =  LinkState(*toe_link_state)
+            self.foot_target[i] = toe_link_state.linkWorldPosition
 
     def update_sensor_output(self):
         """
