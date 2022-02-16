@@ -5,6 +5,7 @@
     [TODO]
 """
 # Utilities
+import json
 from typing import *
 from abc import abstractmethod
 
@@ -27,9 +28,9 @@ class controller_neural_network:
         [TODO]
     """
     NORMAL_DATA_SHAPE         = 60
-    NON_PRIVILIGED_DATA_SHAPE = 121
+    NON_PRIVILIGED_DATA_SHAPE = 133
     PRIVILIGED_DATA_SHAPE     = 59
-    CLASSIFIER_INPUT_SHAPE    = 64 + NORMAL_DATA_SHAPE 
+    CLASSIFIER_INPUT_SHAPE    = 64 + NON_PRIVILIGED_DATA_SHAPE
 
     @abstractmethod
     def __init__(self): pass 
@@ -49,14 +50,23 @@ class teacher_nn(controller_neural_network):
     """
     def __init__(self):
         # Subnetwork that processes the privileged data
-        inputs_x_t = keras.Input(shape=self.PRIVILIGED_DATA_SHAPE)
+        inputs_x_t = keras.Input(
+            shape=self.PRIVILIGED_DATA_SHAPE, 
+            name='priviliged_data'
+        )
         x_t = layers.Dense(72, activation='tanh')(inputs_x_t)
         x_t = layers.Dense(64, activation='tanh')(x_t)
-        self.encoder = keras.Model(inputs_x_t, x_t)
+        self.encoder = keras.Model(
+            inputs_x_t, 
+            x_t,
+            name='encoder'
+          )
 
         # Concatenate the output of the previous network with the non-privileged data
-        inputs_o_t = keras.Input(shape=self.NON_PRIVILIGED_DATA_SHAPE)
-        concat = layers.Concatenate()([inputs_o_t, self.encoder])
+        inputs_o_t = keras.Input(
+            shape=self.NON_PRIVILIGED_DATA_SHAPE,
+            name='non_priviliged_data')
+        concat = layers.Concatenate()([inputs_o_t, x_t])
 
         # Classifier subnetwork
         inputs_c = keras.Input(shape=self.CLASSIFIER_INPUT_SHAPE)
@@ -64,14 +74,14 @@ class teacher_nn(controller_neural_network):
         x = layers.Dense(128, activation='tanh')(x)
         x = layers.Dense(64, activation='tanh')(x)
         outputs_c = layers.Dense(16)(x)
-        self.classifier = keras.Model(inputs_c, outputs_c)
+        self.classifier = keras.Model(inputs_c, outputs_c, name='classifier')
 
         # Entire network
         outputs = self.classifier(concat)
         self.model = keras.Model([inputs_x_t, inputs_o_t], outputs)
 
     def predict(self, input_x_t, input_o_t) -> np.array:
-        return self.model.predict([input_x_t, input_o_t])
+        return self.model.predict(np.array([input_x_t, input_o_t], dtype=np.float32))
 
 class student_nn(controller_neural_network):
     """
@@ -90,69 +100,28 @@ class student_nn(controller_neural_network):
     """
     def __init__(self, teacher: teacher_nn):
         # TCN network
-        inputs_h_t = keras.Input(shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE))
+        inputs_h_t = keras.Input(shape=(HISTORY_LEN, self.NORMAL_DATA_SHAPE))
         h_t = TCN(
-            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE),
-            nb_filters=self.NORMAL_DATA_SHAPE,
-            kernel_size=5,
-            dilatations=(1,),
-            activation='relu',
-            return_sequences=True
-        )(inputs_h_t)
-        h_t = TCN(
-            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE),
             nb_filters=self.NORMAL_DATA_SHAPE // 2,
             kernel_size=5,
-            dilatations=(1,),
-            activation='relu',
-            return_sequences=True
-        )(h_t)
-        h_t = TCN(
-            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE // 2),
-            nb_filters=self.NORMAL_DATA_SHAPE // 2,
-            kernel_size=5,
-            dilatations=(2,),
-            activation='relu',
-            return_sequences=True
-        )(h_t)
-        h_t = TCN(
-            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE // 2),
-            nb_filters=self.NORMAL_DATA_SHAPE // 4,
-            kernel_size=5,
-            dilatations=(2,),
-            activation='relu',
-            return_sequences=True
-        )(h_t)
-        h_t = TCN(
-            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE // 4),
-            nb_filters=self.NORMAL_DATA_SHAPE // 4,
-            kernel_size=5,
-            dilatations=(4,),
-            activation='relu',
-            return_sequences=True
-        )(h_t)
-        h_t = TCN(
-            input_shape=(None, HISTORY_LEN, self.NORMAL_DATA_SHAPE // 4),
-            nb_filters=self.NORMAL_DATA_SHAPE // 8,
-            kernel_size=5,
-            dilatations=(2,),
+            dilations=(1,2,4,8,16),
             activation='relu',
             return_sequences=False
-        )(h_t)
+        )(inputs_h_t)
         h_t = layers.Dense(64, activation='tanh')(h_t)
         self.encoder = keras.Model(inputs_h_t, h_t)
 
         # Concatenate the output of the previous network with the non-privileged data
         inputs_o_t = keras.Input(shape=self.NON_PRIVILIGED_DATA_SHAPE)
-        concat = layers.Concatenate()([inputs_o_t, self.encoder])
+        concat = layers.Concatenate()([inputs_o_t, h_t])
 
         # Classifier subnetwork inherited from teacher
-        self.classifier_model = teacher.classifier_model
+        self.classifier = teacher.classifier
 
         # Entire network
-        outputs = self.classifier_model(concat)
+        outputs = self.classifier(concat)
         self.model = keras.Model([inputs_h_t, inputs_o_t], outputs)
-
-
-
+    
+    def predict(self, input_h_t, input_o_t) -> np.array:
+        return self.model.predict([input_h_t, input_o_t])
 
