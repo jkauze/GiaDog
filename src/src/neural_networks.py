@@ -28,7 +28,7 @@ class controller_neural_network:
         [TODO]
     """
     NORMAL_DATA_SHAPE         = 60
-    NON_PRIVILIGED_DATA_SHAPE = 133
+    NON_PRIVILIGED_DATA_SHAPE = 145
     PRIVILIGED_DATA_SHAPE     = 59
     CLASSIFIER_INPUT_SHAPE    = 64 + NON_PRIVILIGED_DATA_SHAPE
 
@@ -81,7 +81,8 @@ class teacher_nn(controller_neural_network):
         self.model = keras.Model([inputs_x_t, inputs_o_t], outputs)
 
     def predict(self, input_x_t, input_o_t) -> np.array:
-        return self.model.predict(np.array([input_x_t, input_o_t], dtype=np.float32))
+        
+        return self.model.predict([input_o_t,input_x_t])
 
 class student_nn(controller_neural_network):
     """

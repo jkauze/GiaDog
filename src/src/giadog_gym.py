@@ -77,7 +77,7 @@ class teacher_giadog_env(gym.Env):
         --------------------
             (TODO)
     """
-    FOOT_HISTORY_LEN = 2
+    FOOT_HISTORY_LEN = 3
     JOINT_VEL_HISTORY_LEN = 2
     JOINT_ERR_HISTORY_LEN = 2
     NON_PRIVILIGED_DATA = {
@@ -450,8 +450,9 @@ class teacher_giadog_env(gym.Env):
         input_o_t = np.concatenate(
             [np.reshape(obs[data],-1) for data in self.PRIVILIGED_DATA]
         )
+        print(input_x_t.shape, input_o_t.shape)
 
-        return self.model.predict([1,input_x_t], [1,input_o_t])
+        return self.model.predict(np.array([input_x_t], dtype=np.float32), np.array([input_o_t], dtype=np.float32))
 
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, dict]:
         """
