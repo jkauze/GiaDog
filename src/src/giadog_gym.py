@@ -348,7 +348,7 @@ class teacher_giadog_env(gym.Env):
         r_bc = - sum(self.thighs_contact) - sum(self.shanks_contact)
 
         # Target Smoothness Reward
-        r_fd_T = np.reshape(self.foot_target_hist, (3,-1))
+        r_fd_T = np.reshape(self.foot_target_hist, (self.FOOT_HISTORY_LEN,-1))
         r_s = -np.linalg.norm(r_fd_T[0] - 2.0 * r_fd_T[1] + r_fd_T[2])
 
         # Torque Reward
@@ -451,7 +451,7 @@ class teacher_giadog_env(gym.Env):
             [np.reshape(obs[data],-1) for data in self.PRIVILIGED_DATA]
         )
 
-        return self.model.predict(input_x_t, input_o_t)
+        return self.model.predict([1,input_x_t], [1,input_o_t])
 
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, dict]:
         """
