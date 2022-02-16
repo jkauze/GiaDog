@@ -39,6 +39,9 @@ VEL_TH          = ENV["PHYSICS"]["VELOCITY_THRESHOLD"]
 SWIGN_PH        = ENV["PHYSICS"]["SWING_PHASE"]
 GRAVITY_VECTOR  = ENV["PHYSICS"]["GRAVITY_VECTOR"]
 TERRAIN_FILE    = ENV["SIMULATION"]["TERRAIN_FILE"]
+MESH_SCALE      = ENV["SIMULATION"]["MESH_SCALE"]
+ROWS            = ENV["SIMULATION"]["ROWS"]
+COLS            = ENV["SIMULATION"]["COLS"]
 HISTORY_LEN     = ENV["NEURAL_NETWORK"]["HISTORY_LEN"]
 
 
@@ -117,7 +120,7 @@ class teacher_giadog_env(gym.Env):
                 high = np.inf * np.ones((2,)),
                 dtype = np.float32
             ),
-            'turn_dir': spaces.Discrete(3, start=-1),
+            'turn_dir': spaces.Discrete(3),
             'gravity_vector': spaces.Box(
                 low = -np.inf * np.ones((3,)), 
                 high = np.inf * np.ones((3,)),
@@ -156,6 +159,7 @@ class teacher_giadog_env(gym.Env):
             'base_freq': spaces.Box(
                 low = -np.inf,
                 high = np.inf,
+                shape = (1,),
                 dtype = np.float
             ),
             'joint_err_hist': spaces.Box(
@@ -234,10 +238,12 @@ class teacher_giadog_env(gym.Env):
         self.foot_target_hist = np.zeros((self.FOOT_HISTORY_LEN, 4, 3))
         self.joint_vel_hist = np.zeros((self.JOINT_VEL_HISTORY_LEN, 12))
         self.joint_err_hist = np.zeros((self.JOINT_ERR_HISTORY_LEN, 12))
+        self.joint_velocities = np.zeros((12,))
         self.ftg_phases = np.zeros((8,))
         self.ftg_freqs = np.zeros((4,))
         self.base_freq = BASE_FREQ
         self.gravity_vector = GRAVITY_VECTOR
+        self.target_dir = np.zeros((2,))
         self.E_v = []
 
         self.model = teacher_nn()
@@ -273,14 +279,9 @@ class teacher_giadog_env(gym.Env):
         msg.joint_target_positions = joint_target_positions
         cls.joints_pub.publish(msg)
 
-    def __get_reward(self, ftg_freqs: List[float]) -> float:
+    def __get_reward(self) -> float:
         """
             Reward function.
-
-            Arguments:
-            ----------
-                ftg_freqs: List[float], len 4
-                    FTG frequencies.
 
             Return:
             -------
@@ -314,7 +315,7 @@ class teacher_giadog_env(gym.Env):
         foot_clear = 0
         for i in range(4):
             # If i-th foot is in swign phase.
-            if ftg_freqs[i] >= SWIGN_PH:
+            if self.ftg_freqs[i] >= SWIGN_PH:
                 count_swing += 1
 
                 # Verify that the height of the i-th foot is greater than the height of 
@@ -367,7 +368,8 @@ class teacher_giadog_env(gym.Env):
         self.timestep    = time_data.timestep
         self.position    = n_data.position
         self.orientation = n_data.orientation
-        self.command_dir = self.target_dir - np.array(self.position)
+        self.command_dir = self.target_dir - np.array(self.position[:2])
+        self.command_dir = self.command_dir / np.linalg.norm(self.command_dir)
 
         # Non-priviliged data
         self.linear_vel            = n_data.linear_vel 
@@ -394,7 +396,7 @@ class teacher_giadog_env(gym.Env):
         self.height_scan     = np.reshape(p_data.height_scan, (4,9)) 
         self.external_force  = np.zeros((3,))
 
-        v = int(np.array(self.linear_vel) @ self.command_dir > MIN_DESIRED_VEL)
+        v = int(np.array(self.linear_vel[:2]) @ self.command_dir > MIN_DESIRED_VEL)
         self.E_v.append(v)
 
     def __terminate(self) -> bool:
@@ -442,10 +444,12 @@ class teacher_giadog_env(gym.Env):
         """
             [TODO]
         """
-        input_x_t = np.concat(
+        input_x_t = np.concatenate(
             [np.reshape(obs[data],-1) for data in self.NON_PRIVILIGED_DATA]
         )
-        input_o_t = np.concat([np.reshape(obs[data],-1) for data in self.PRIVILIGED_DATA])
+        input_o_t = np.concatenate(
+            [np.reshape(obs[data],-1) for data in self.PRIVILIGED_DATA]
+        )
 
         return self.model.predict(input_x_t, input_o_t)
 
@@ -491,7 +495,9 @@ class teacher_giadog_env(gym.Env):
 
         # A random goal is selected
         x, y = terrain_gen.set_goal(terrain, 3)
-        self.target_dir = np.array([x / 50 - 5, y / 50 - 5])
+        x = x / MESH_SCALE[0] - ROWS / (2 * MESH_SCALE[0])
+        y = y / MESH_SCALE[1] - COLS / (2 * MESH_SCALE[1])
+        self.target_dir = np.array([x, y])
         self.turn_dir = randint(-1, 1)
 
         # We store the terrain in a file
@@ -508,9 +514,9 @@ class teacher_giadog_env(gym.Env):
 
         self.E_v = []
 
-    def traversability(self) -> float:
+    def traverability(self) -> float:
         """
-            Calculate the current traversibility
+            Calculate the current traverability
         """
         if len(self.E_v) == 0: return 0
         return sum(self.E_v) / len(self.E_v)

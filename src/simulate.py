@@ -246,8 +246,8 @@ if __name__ == '__main__':
     # Steps and stairs arguments
     parser.add_argument(
         '-w', '--width',
-        type=int,
-        default='35',
+        type=float,
+        default='0.7',
         help='Width of cubes in steps or of the stairs.',
         metavar='WIDTH'
     )
@@ -323,7 +323,7 @@ if __name__ == '__main__':
             terrain = terrain_gen.steps(
                 ROWS, 
                 COLS, 
-                int(args.width), 
+                float(args.width), 
                 float(args.height), 
                 args.seed
             )
@@ -334,7 +334,12 @@ if __name__ == '__main__':
                 f'\033[1;36m[i]\033[0m Generating stairs with width {args.width} ' +\
                 f'and height {args.height}.'
             )
-            terrain = terrain_gen.stairs(ROWS, COLS, int(args.width), float(args.height))
+            terrain = terrain_gen.stairs(
+                ROWS, 
+                COLS, 
+                float(args.width), 
+                float(args.height)
+            )
             terrain_gen.save(terrain, terrain_file)
 
     else:

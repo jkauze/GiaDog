@@ -17,10 +17,14 @@ if __name__ == '__main__':
         amplitude=0.2,
         seed=randint(0, 1e6)
     )
-    train_env.reset('gym_terrain.txt')
-    sleep(2)
 
+    print('Running!')
     while True:
+        # Reseteamos el terreno
+        train_env.reset('gym_terrain.txt')
+        # Esperamos que el timestep se reinice
+        while train_env.timestep > 120: pass
+
         done = False
         obs = train_env.get_obs()
         while not done:
@@ -29,10 +33,7 @@ if __name__ == '__main__':
             # Aplicamos la accion al entorno
             obs, reward, done, info = train_env.step(action)
 
-        tr = train_env.traversability()
-        print(f'Traversatility: {tr}')
+        tr = train_env.traverability()
+        print(f'Traverability: {tr}')
 
-        # Reseteamos el terreno
-        train_env.reset('gym_terrain.txt')
-        sleep(2)
 
