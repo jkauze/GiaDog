@@ -112,9 +112,9 @@ sudo docker run \
 3. Once inside the container, build the ROS package
 
 ```bash
-source /opt/ros/melodic/setup.bash 
+source /opt/ros/noetic/setup.bash 
 catkin_make_isolated
-echo -e "\nsource /opt/ros/melodic/setup.bash" >> ~/.bashrc
+echo -e "\nsource /opt/ros/noetic/setup.bash" >> ~/.bashrc
 echo -e "source ${GIADOG_DIR}/devel_isolated/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```

@@ -19,6 +19,8 @@ with open('.env.json', 'r') as f:
 STEPS_FREQUENCY   = ENV["SIMULATION"]["STEPS_FREQUENCY"]
 STEPS_NOISE       = ENV["SIMULATION"]["STEPS_NOISE"]
 ZONE_STAIRS_WIDTH = ENV["SIMULATION"]["ZONE_STAIRS_WIDTH"]
+MESH_SCALE        = ENV["SIMULATION"]["MESH_SCALE"]
+SCALE             = (MESH_SCALE[0] + MESH_SCALE[1]) / 2
 
 
 class terrain_gen:
@@ -248,7 +250,7 @@ class terrain_gen:
             cls, 
             rows: int, 
             cols: int, 
-            width: int, 
+            width: float, 
             height: float, 
             seed: int
         ) -> np.ndarray:
@@ -261,7 +263,7 @@ class terrain_gen:
                 Number of rows of the terrain.
             cols: int
                 Number of columns of the terrain.
-            width: int
+            width: float
                 Width and length of the cubes.
             height: float
                 Maximum height of the cubes.
@@ -273,6 +275,8 @@ class terrain_gen:
             np.ndarray
                 Resulting terrain.
         """
+        width = int(width / SCALE)
+
         # Generate the terrain
         terrain = cls.terrain(rows, cols)
         p_noise = PerlinNoise(octaves=STEPS_FREQUENCY, seed=seed)
@@ -293,7 +297,7 @@ class terrain_gen:
         return terrain
 
     @classmethod
-    def stairs(cls, rows: int, cols: int, width: int, height: float) -> np.ndarray:
+    def stairs(cls, rows: int, cols: int, width: float, height: float) -> np.ndarray:
         """
             Generate a terrain of stairs.
 
@@ -303,7 +307,7 @@ class terrain_gen:
                 Number of rows of the terrain.
             cols: int
                 Number of columns of the terrain.
-            width: int
+            width: float
                 Steps width.
             height: float
                 Steps height.
@@ -314,6 +318,7 @@ class terrain_gen:
                 Resulting terrain.
         """
         terrain = cls.terrain(rows, cols)
+        width = int(width / SCALE)
 
         # Space occupied by the central area
         middle_width = ZONE_STAIRS_WIDTH
