@@ -67,7 +67,7 @@ class simulation:
         self.p = bullet_server
         self.self_collision_enabled = self_collision_enabled
         
-        self.p.connect(self.p.GUI if gui else self.p.DIRECT)
+        self.p.connect(self.p.GUI if gui else self.p.DIRECT, options="--opengl2")
 
     def __get_terrain_height(self, x: float, y: float) -> float:
         """
@@ -89,6 +89,8 @@ class simulation:
                     The terrain height at that x, y point.
                     numpy.NaN if if the coordinates go off the map
         """
+        if x == np.NaN or y == np.NaN: return np.NaN
+        
         x = int(x / MESH_SCALE[0]) + self.center[0]
         y = int(y / MESH_SCALE[1]) + self.center[1]
 
@@ -214,8 +216,12 @@ class simulation:
 
         contact_force_mag = np.sqrt(contact_force.dot(contact_force))
         fricction_coefficient = np.sqrt(friction_force.dot(friction_force))
-        fricction_coefficient /= contact_force_mag
-        contact_force /= contact_force_mag
+        if contact_force_mag != 0:
+            fricction_coefficient /= contact_force_mag
+            contact_force /= contact_force_mag
+        else:
+            contact_force  = np.array([0,0,0]) 
+            friction_force = np.array([0,0,0])
 
         return (contact_force_mag, fricction_coefficient, contact_force)
 

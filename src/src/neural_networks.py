@@ -56,11 +56,7 @@ class teacher_nn(controller_neural_network):
         )
         x_t = layers.Dense(72, activation='tanh')(inputs_x_t)
         x_t = layers.Dense(64, activation='tanh')(x_t)
-        self.encoder = keras.Model(
-            inputs_x_t, 
-            x_t,
-            name='encoder'
-          )
+        self.encoder = keras.Model(inputs_x_t, x_t, name='encoder')
 
         # Concatenate the output of the previous network with the non-privileged data
         inputs_o_t = keras.Input(
@@ -81,7 +77,7 @@ class teacher_nn(controller_neural_network):
         self.model = keras.Model([inputs_x_t, inputs_o_t], outputs)
 
     def predict(self, input_x_t, input_o_t) -> np.array:
-        return self.model.predict(np.array([input_x_t, input_o_t], dtype=np.float32))
+        return self.model.predict([input_x_t, input_o_t])
 
 class student_nn(controller_neural_network):
     """

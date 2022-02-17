@@ -100,10 +100,11 @@ def calculate_foot_trajectories(
             numpy.array, shape(4,)
                 Foot Trajectory Generator phases of each leg.
     """
+    theta = theta[0] # Temporary fix for theta shape
     target_foot_positions = np.zeros([4,3])
     FTG_frequencies = np.zeros([4])
     FTG_phases = np.zeros([4,2])
-
+    
     for i in range(4):
         xyz_residual = theta[i : i+3]
         f_i = theta[i + 3]

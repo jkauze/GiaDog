@@ -16,11 +16,15 @@ import gym
 from gym import spaces
 
 # Simulation
-import rospy
-import message_filters
 from src.terrain_gen import *
 from src.simulation import simulation
-from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data, text, timestep
+try:
+    import rospy
+    import message_filters
+    from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data, \
+        text, timestep
+except:
+    print(f'\033[1;93m[w]\033[0m Warning: Executing giadog_gym without ROS.')
 
 # Controller
 from src.neural_networks import *
@@ -378,12 +382,7 @@ class teacher_giadog_env(gym.Env):
 
         return (5*r_lv + 5*r_av + 4*r_b + r_fc + 2*r_bc + 2.5*r_s) / 100.0 + 2e-5 * r_tau
 
-    def __update_obs_ros(
-            self, 
-            time_data: timestep, 
-            n_data: normal_data,
-            p_data: priviliged_data
-        ):
+    def __update_obs_ros(self, time_data, n_data, p_data):
         """
             Update data from ROS
         """
@@ -502,13 +501,16 @@ class teacher_giadog_env(gym.Env):
             [TODO]
         """
         input_x_t = np.concatenate(
-            [np.reshape(obs[data],-1) for data in self.NON_PRIVILIGED_DATA]
-        )
-        input_o_t = np.concatenate(
             [np.reshape(obs[data],-1) for data in self.PRIVILIGED_DATA]
         )
+        input_o_t = np.concatenate(
+            [np.reshape(obs[data],-1) for data in self.NON_PRIVILIGED_DATA]
+        )
 
-        return self.model.predict([1,input_x_t], [1,input_o_t])
+        return self.model.predict(
+            np.array([input_x_t], dtype=np.float32), 
+            np.array([input_o_t], dtype=np.float32)
+        )
 
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, dict]:
         """
@@ -517,11 +519,8 @@ class teacher_giadog_env(gym.Env):
             [TODO]
         """
         ftg_data = calculate_foot_trajectories(action, self.timestep)
-        target_foot_positions, self.ftg_freqs, ftg_angles= ftg_data
-        ftg_phases = []
-        for angle in ftg_angles: 
-            ftg_phases += [np.sin(angle), np.cos(angle)]
-        self.ftg_phases = ftg_phases
+        target_foot_positions, self.ftg_freqs, self.ftg_phases = ftg_data
+        self.ftg_phases = np.reshape(self.ftg_phases, -1)
 
         joints_angles = []
         for i in range(4):
