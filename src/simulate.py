@@ -42,7 +42,7 @@ def run_simulation(sim: simulation):
     """ Run the simulation. """
     print('\n\033[1;36m[i]\033[0m Simulation is runing!')
     rate = rospy.Rate(STEPS_PER_REAL_SECOND) 
-    p.setTimeStep(SIM_SECONDS_PER_STEP)
+    sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
 
     # Use the following variables to monitor the number of updates per second.
     begin = time()
@@ -58,7 +58,7 @@ def run_simulation(sim: simulation):
             # Report simulation speed every thousand steps
             if step % 1000 == 0: 
                 vel = step / (time() - begin)
-                print(f'Execunting approximately {vel} steps per second.')
+                print(f'Executing approximately {vel} steps per second.')
 
             # Create message
             msg = timestep() 
@@ -104,20 +104,20 @@ def normal_data_publisher(sim: simulation):
             msg.orientation       = list(sim.orientation)
 
             # Velocities
-            msg.linear_vel        = list(sim.base_linear_velocity)
-            msg.angular_vel       = list(sim.base_angular_velocity)
+            msg.linear_vel        = list(sim.linear_vel)
+            msg.angular_vel       = list(sim.angular_vel)
 
             # Contact states
-            msg.toes_contact      = list(sim.toes_contact_states)
-            msg.thighs_contact    = list(sim.thighs_contact_states)
-            msg.shanks_contact    = list(sim.shanks_contact_states)
+            msg.toes_contact      = list(sim.toes_contact)
+            msg.thighs_contact    = list(sim.thighs_contact)
+            msg.shanks_contact    = list(sim.shanks_contact)
 
             # Joints states
             msg.joint_angles      = list(sim.joint_angles)
             msg.joint_velocities  = list(sim.joint_velocities)
 
             # Tranformation matrices
-            msg.transf_matrix     = list(np.reshape(sim.transformation_matrices, -1))
+            msg.transf_matrix     = list(np.reshape(sim.transf_matrix, -1))
 
             msg.foot_target       = list(np.reshape(sim.foot_target, -1))
 
@@ -147,17 +147,17 @@ def priviliged_data_publisher(sim: simulation):
             msg.joint_torques    = list(sim.joint_torques)
 
             # Normal at each toe
-            msg.normal_toe       = list(np.reshape(sim.terrain_normal_at_each_toe, -1))
+            msg.normal_toe       = list(np.reshape(sim.normal_toe, -1))
 
             # Force at each toe
-            msg.toes_force1      = list(sim.contact_force_at_each_toe)
-            msg.toes_force2      = list(sim.toe_force_sensor)
+            msg.toes_force1      = list(sim.toes_force1)
+            msg.toes_force2      = list(sim.toes_force2)
 
             # Ground friction coefficients at each toe 
-            msg.ground_friction  = list(sim.foot_ground_friction_coefficients)
+            msg.ground_friction  = list(sim.ground_friction)
 
             # Height scan at each toe 
-            msg.height_scan      = list(np.reshape(sim.height_scan_at_each_toe, -1))
+            msg.height_scan      = list(np.reshape(sim.height_scan, -1))
 
             # Publish
             pub.publish(msg)

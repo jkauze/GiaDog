@@ -115,7 +115,7 @@ sudo docker run \
 source /opt/ros/noetic/setup.bash 
 catkin_make_isolated
 echo -e "\nsource /opt/ros/noetic/setup.bash" >> ~/.bashrc
-echo -e "source ${GIADOG_DIR}/devel_isolated/setup.bash" >> ~/.bashrc
+echo -e "source /usr/src/GiaDog/devel_isolated/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
