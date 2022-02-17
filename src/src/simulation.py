@@ -312,6 +312,7 @@ class simulation:
                     y coordintate of the robot initial position (In the world frame).
                     Default: 0.0
         """
+        print(f'\033[1;36m[i]\033[0m Restarting simulation.')
         self.terrain_file = terrain_file
         
         # This array is used to calculate the robot toes heightfields 

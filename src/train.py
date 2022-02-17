@@ -5,6 +5,7 @@ import argparse
 import pybullet as p
 from time import time, sleep
 from src.giadog_gym import *
+from src.terrain_curriculum import *
 try: import rospy
 except: pass
 
@@ -112,6 +113,10 @@ if __name__ == '__main__':
     train_env.make_terrain('steps', rows=ROWS, cols=COLS, width=0.7, height=0.0, seed=1)
 
     print('Running!')
+    tc = terrain_curriculum(train_env)
+    tc.train()
+    exit(0)
+
     while True:
         # Reseteamos el terreno
         train_env.reset(TERRAIN_FILE)
