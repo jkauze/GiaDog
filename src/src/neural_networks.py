@@ -77,7 +77,7 @@ class teacher_nn(controller_neural_network):
         self.model = keras.Model([inputs_x_t, inputs_o_t], outputs)
 
     def predict(self, input_x_t, input_o_t) -> np.array:
-        return self.model.predict([input_x_t, input_o_t])
+        return self.model([input_x_t, input_o_t])
 
 class student_nn(controller_neural_network):
     """
@@ -119,5 +119,5 @@ class student_nn(controller_neural_network):
         self.model = keras.Model([inputs_h_t, inputs_o_t], outputs)
     
     def predict(self, input_h_t, input_o_t) -> np.array:
-        return self.model.predict([input_h_t, input_o_t])
+        return self.model([input_h_t, input_o_t])
 
