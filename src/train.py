@@ -8,6 +8,9 @@ from src.giadog_gym import *
 try: import rospy
 except: pass
 
+from src.agents import teacher_agent, ars_agent
+from src.neural_networks import teacher_nn
+
 
 # Cargamos las variables de entorno
 with open('.env.json', 'r') as f:
@@ -109,9 +112,25 @@ if __name__ == '__main__':
         sim.reset(TERRAIN_FILE, X_INIT, Y_INIT)
 
     train_env = teacher_giadog_env(sim)
+    
     train_env.make_terrain('steps', rows=ROWS, cols=COLS, width=0.7, height=0.0, seed=1)
+    
+    agent_params = {
+        
+        "step size": 0.02, # a.k.a. learning rate
+        "directions sampled by iteration": 16,
+        "exploration standard deviation noise": 0.03, # Debe ser menor a 1
+        "number of top directions to use": 16,
+        "enviroment": train_env, 
+        "train episode steps": 2000, # Numero de steps que cada exploracion tendra H. (N es el nuemro de exploraciones) 
+    }
 
+    agent = ars_agent(
+            agent_params
+    ) #teacher_agent(teacher_nn(), train_env)
+    
     print('Running!')
+        
     while True:
         # Reseteamos el terreno
         train_env.reset(TERRAIN_FILE)
@@ -121,12 +140,22 @@ if __name__ == '__main__':
         done = False
         obs = train_env.get_obs()
         rate = Rate(STEPS_PER_REAL_SECOND)
+
+        for i in range(200):
+            agent.update_V2(TERRAIN_FILE)
+        
+        total_r = 0
         while not done:
             # Obtenemos la accion de la politica
-            action = train_env.predict(obs)
+            agent.normalizer.observe(agent.process_obs(obs))  
+            action = agent.action(obs)
             # Aplicamos la accion al entorno
-            obs, reward, done, info = train_env.step(action)
+            print(action)
+            obs, reward, done, info = train_env.step([action])
             rate.sleep()
+            total_r = total_r + reward
+        
+        print("total_r", total_r)
 
         tr = train_env.traverability()
         print(f'Traverability: {tr}')
