@@ -297,7 +297,14 @@ class terrain_gen:
         return terrain
 
     @classmethod
-    def stairs(cls, rows: int, cols: int, width: float, height: float) -> np.ndarray:
+    def stairs(
+            cls, 
+            rows: int, 
+            cols: int, 
+            width: float, 
+            height: float,
+            seed: int=0
+        ) -> np.ndarray:
         """
             Generate a terrain of stairs.
 
