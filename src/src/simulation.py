@@ -67,7 +67,7 @@ class simulation:
         self.p = bullet_server
         self.self_collision_enabled = self_collision_enabled
         
-        self.p.connect(self.p.GUI if gui else self.p.DIRECT, options="--opengl2")
+        self.p.connect(self.p.GUI if gui else self.p.DIRECT)
 
     def __get_terrain_height(self, x: float, y: float) -> float:
         """

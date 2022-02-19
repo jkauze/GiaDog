@@ -229,7 +229,6 @@ class teacher_giadog_env(gym.Env):
         self.target_dir = np.zeros((2,))
         self.timestep = 0
         self.E_v = []
-        self.model = teacher_nn()
 
         self.sim = sim
         if self.sim == None:
@@ -380,7 +379,10 @@ class teacher_giadog_env(gym.Env):
         # Torque Reward
         r_tau = -sum(abs(torque) for torque in state.joint_torques)
 
-        return (5*r_lv + 5*r_av + 4*r_b + r_fc + 2*r_bc + 2.5*r_s) / 100.0 + 2e-5 * r_tau
+        reward = (5*r_lv + 5*r_av + 4*r_b + r_fc + 2*r_bc + 2.5*r_s) \
+            / 100.0 + 2e-5 * r_tau
+
+        return reward
 
     def __update_obs_ros(self, time_data, n_data, p_data):
         """
@@ -496,22 +498,6 @@ class teacher_giadog_env(gym.Env):
             'external_force' : self.external_force
         }
 
-    def predict(self, obs: Dict[str, Any]) -> np.array:
-        """
-            [TODO]
-        """
-        input_x_t = np.concatenate(
-            [np.reshape(obs[data],-1) for data in self.PRIVILIGED_DATA]
-        )
-        input_o_t = np.concatenate(
-            [np.reshape(obs[data],-1) for data in self.NON_PRIVILIGED_DATA]
-        )
-
-        return self.model.predict(
-            np.array([input_x_t], dtype=np.float32), 
-            np.array([input_o_t], dtype=np.float32)
-        )
-
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, dict]:
         """
             Apply an action on the environment
@@ -581,7 +567,7 @@ class teacher_giadog_env(gym.Env):
 
     def traverability(self) -> float:
         """
-            Calculate the current traverability
+            Calculate the current transversability
         """
         if len(self.E_v) == 0: return 0
         return sum(self.E_v) / len(self.E_v)
