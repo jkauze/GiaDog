@@ -21,7 +21,31 @@ with open('.env.json', 'r') as f:
     ENV = json.load(f)
 # Obtenemos las constantes necesarias
 HISTORY_LEN  = ENV["NEURAL_NETWORK"]["HISTORY_LEN"]
-
+NON_PRIVILIGED_DATA = [
+    'target_dir',
+    'turn_dir',
+    'gravity_vector',
+    'angular_vel',
+    'linear_vel',
+    'joint_angles',
+    'joint_vels',
+    'ftg_phases',
+    'ftg_freqs',
+    'base_freq',
+    'joint_err_hist',
+    'joint_vel_hist',
+    'foot_target_hist',
+    'toes_contact',
+    'thighs_contact',
+    'shanks_contact'
+]
+PRIVILIGED_DATA = [
+    'normal_foot',
+    'height_scan',
+    'foot_forces',
+    'foot_friction',
+    'external_force'
+]
 
 class controller_neural_network:
     """
@@ -34,9 +58,6 @@ class controller_neural_network:
 
     @abstractmethod
     def __init__(self): pass 
-
-    @abstractmethod 
-    def __loss(self): pass
 
     @abstractmethod
     def train(self): pass 
@@ -78,6 +99,18 @@ class teacher_nn(controller_neural_network):
 
     def predict(self, input_x_t, input_o_t) -> np.array:
         return self.model([input_x_t, input_o_t])
+
+    def predict_obs(self, obs: Dict[str, np.array]) -> np.array:
+        input_x_t = np.concatenate([
+            np.reshape(obs[attr], -1) for attr in PRIVILIGED_DATA
+        ])
+        input_o_t = np.concatenate([
+            np.reshape(obs[attr], -1) for attr in NON_PRIVILIGED_DATA
+        ])
+        return self.predict(
+            np.array([input_x_t], dtype=np.float32), 
+            np.array([input_o_t], dtype=np.float32)
+        )
 
 class student_nn(controller_neural_network):
     """

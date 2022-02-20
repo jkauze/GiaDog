@@ -5,9 +5,10 @@
     [TODO]
 """
 from typing import *
-from random import randint, choice, choices, uniform
 from src.giadog_gym import *
+from src.neural_networks import *
 from dataclasses import dataclass
+from random import randint, choice, choices, uniform
 
 
 # Cargamos las variables de entorno
@@ -21,7 +22,7 @@ N_PARTICLES      = ENV["TRAIN"]["N_PARTICLES"]
 P_TRANSITION     = ENV["TRAIN"]["P_TRANSITION"]
 MIN_DESIRED_TRAV = ENV["TRAIN"]["MIN_DESIRED_TRAV"]
 MAX_DESIRED_TRAV = ENV["TRAIN"]["MAX_DESIRED_TRAV"]
-RANDOM_STEP_PROP = ENV["TRAIN"]["RANDOM_STEP_PROP "]
+RANDOM_STEP_PROP = ENV["TRAIN"]["RANDOM_STEP_PROP"]
 ROWS             = ENV["SIMULATION"]["ROWS"]
 COLS             = ENV["SIMULATION"]["COLS"]
 TERRAIN_FILE     = ENV["SIMULATION"]["TERRAIN_FILE"]
@@ -78,8 +79,9 @@ class terrain_curriculum:
     """
         [TODO]
     """
-    def __init__(self, gym_env: teacher_giadog_env):
+    def __init__(self, gym_env: teacher_giadog_env, model: teacher_nn):
         self.gym_env = gym_env 
+        self.model = model
 
         hills_C_t  = [
             particle('hills', INIT_VALUES['hills'].copy(), [0] * N_TRAJ * N_EVALUATE) 
@@ -115,7 +117,7 @@ class terrain_curriculum:
         obs = self.gym_env.get_obs()
         while not done:
             # Obtenemos la accion de la politica
-            action = self.gym_env.predict(obs)
+            action = self.model.predict_obs(obs)
             # Aplicamos la accion al entorno
             obs, reward, done, info = self.gym_env.step(action)
 
@@ -134,10 +136,8 @@ class terrain_curriculum:
             if p.type == 'steps': prob_sum = steps_prob_sum
             if p.type == 'stairs': prob_sum = stairs_prob_sum
 
-            if prob_sum != 0:
-                p.weight = p.measurement_prob / prob_sum
-            else: 
-                p.weight = 1 / N_PARTICLES
+            if prob_sum != 0: p.weight = p.measurement_prob / prob_sum
+            else:  p.weight = 1 / N_PARTICLES
 
     def __resample(self):
         """

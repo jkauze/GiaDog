@@ -87,31 +87,6 @@ class teacher_giadog_env(gym.Env):
     FOOT_HISTORY_LEN = 3
     JOINT_VEL_HISTORY_LEN = 2
     JOINT_ERR_HISTORY_LEN = 2
-    NON_PRIVILIGED_DATA = {
-        'target_dir',
-        'turn_dir',
-        'gravity_vector',
-        'angular_vel',
-        'linear_vel',
-        'joint_angles',
-        'joint_vels',
-        'ftg_phases',
-        'ftg_freqs',
-        'base_freq',
-        'joint_err_hist',
-        'joint_vel_hist',
-        'foot_target_hist',
-        'toes_contact',
-        'thighs_contact',
-        'shanks_contact'
-    }
-    PRIVILIGED_DATA = {
-        'normal_foot',
-        'height_scan',
-        'foot_forces',
-        'foot_friction',
-        'external_force'
-    }
 
     def __init__(self, sim: Optional[simulation]=None):
         self.observation_space = spaces.Dict({
@@ -454,6 +429,9 @@ class teacher_giadog_env(gym.Env):
             self.begin_time = time()
         else:
             self.count += 1
+
+        v = int(np.array(self.sim.linear_vel[:2]) @ self.command_dir > MIN_DESIRED_VEL)
+        self.E_v.append(v)
 
     def __terminate(self) -> bool:
         """
