@@ -364,7 +364,49 @@ class simulation:
             )
         except Exception as e:
             print(f'\033[1;93m[w]\033[0m {e}.')
+            
+    def apply_force_to_base(self, F):
+        """
+        Applies a force to the base of the robot.
 
+        Arguments:
+        ----------
+            F: List[float], shape (3,)
+                Force vector to be applied to the base of the robot.
+                Expressed in the world frame.
+        """
+
+        self.p.applyExternalForce(self.quadruped, -1, F, [0,0,0], 
+                                    self.p.WORLD_FRAME)
+    
+    def get_external_force(self):
+        """
+        Set and randomize the external force applied to the robot base.
+        
+        Arguments:
+        ----------
+            self : object simulation class.
+        Refrenece:
+        https://github.com/leggedrobotics/learning_quadrupedal_locomotion_over_challenging_terrain_supplementary/blob/master/include/environment/environment_c010.hpp
+        Line: 1575
+        """
+        # The module is a number sampled from 0 to 30  Newtons
+        # In the original paper the force is sampled from 0 to 120 Newtons
+        force_module = np.random.uniform() * 30 # N
+        
+        # Randomize the direction of the force
+        az = np.pi * np.random.uniform()
+        el = np.pi/2 * np.random.uniform()
+
+        force_norm = np.array([
+            np.cos(az) * np.cos(el),
+            np.sin(az) * np.cos(el),
+            np.sin(el),
+        ])
+
+        force = force_norm * force_module
+
+        return force
 
     # =========================== UPDATE FUNCTIONS =========================== #
     def update_position_orientation(self):
