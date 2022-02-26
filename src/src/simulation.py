@@ -104,7 +104,7 @@ class simulation:
             Reset bot state.
         """
         self.position                  = np.zeros([3])
-        self.orientation               = np.zeros([2])
+        self.orientation               = np.zeros([3])
 
         # State data // Sensor data
         self.desired_direction         = np.zeros([2])
@@ -614,22 +614,38 @@ class simulation:
         self.update_transformation_matrices()
 
     def is_fallen(self):
-        
-        """Decide whether the quadruped has fallen.
-        If the up directions between the base and the world is larger (the dot
-        product is smaller than 0.55) or the base is very low on the ground
-        (the height is smaller than 0.13 meter), spot is considered fallen.
-        Returns:
-            Boolean value that indicates whether spot has fallen.
         """
+        Decide whether the quadruped has fallen.
+
+        If the up directions between the base and the world is larger (the dot
+        product is smaller than 0.55), spot is considered fallen.
         
+        There was a second condition in the original code, but it was not 
+            implemented as it caused early termination of the simulation.
+        
+        The condition was the following: The base is very low on the ground
+        (the height is smaller than 0.13 meter).
+        
+        Arguments:
+        ----------
+            None
+
+        Returns:
+        -------
+            Boolean value that indicates whether spot has fallen.
+
+        Reference:
+        ----------
+        minitaur enviroment (an original pybullet RL enviroment)
+        """
+        print(self.orientation)
         rot_mat = self.p.getMatrixFromQuaternion(
             self.p.getQuaternionFromEuler(self.orientation))
         local_up = rot_mat[6:]
-        pos = self.position
+        #pos = self.position
         # 
         return (np.dot(np.asarray([0, 0, 1]), np.asarray(local_up)) < 0.55) \
-                or pos[2] < 0.13
+               # or pos[2] < 0.13
     # =========================== DEBUGGING FUNCTIONS =========================== #
     def set_toes_friction_coefficients(self, friction_coefficient: float):
         """
