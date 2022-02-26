@@ -613,6 +613,23 @@ class simulation:
         self.update_joints_sensors()
         self.update_transformation_matrices()
 
+    def is_fallen(self):
+        
+        """Decide whether the quadruped has fallen.
+        If the up directions between the base and the world is larger (the dot
+        product is smaller than 0.55) or the base is very low on the ground
+        (the height is smaller than 0.13 meter), spot is considered fallen.
+        Returns:
+            Boolean value that indicates whether spot has fallen.
+        """
+        
+        rot_mat = self.p.getMatrixFromQuaternion(
+            self.p.getQuaternionFromEuler(self.orientation))
+        local_up = rot_mat[6:]
+        pos = self.position
+        # 
+        return (np.dot(np.asarray([0, 0, 1]), np.asarray(local_up)) < 0.55) \
+                or pos[2] < 0.13
     # =========================== DEBUGGING FUNCTIONS =========================== #
     def set_toes_friction_coefficients(self, friction_coefficient: float):
         """
@@ -960,7 +977,7 @@ class simulation:
             
             self.actuate_joints(joint_target_positions)
 
-    def test_FTG(self, controller):
+    def test_FTG(self):
 
         """
         Tesitng function to test the controller's Foot Trajectory Generator.
@@ -1039,5 +1056,5 @@ if __name__ == '__main__':
     
     sim.initialize(fix_robot_base=True) 
 
-    sim.test_controller_IK()
+    sim.test_FTG()
 
