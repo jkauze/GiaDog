@@ -463,7 +463,8 @@ class teacher_giadog_env(gym.Env):
         d_vector = self.target_dir - np.array(self.position[:2])
         d = d_vector @ d_vector
 
-        return d < GOAL_RADIUS_2 or self.timestep > MAX_ITER_TIME
+        return d < GOAL_RADIUS_2 or self.timestep > MAX_ITER_TIME\
+                 or self.sim.is_fallen()
 
     def get_obs(self) -> Dict[str, Any]: 
         """
