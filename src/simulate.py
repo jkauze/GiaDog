@@ -36,8 +36,6 @@ X_INIT                = ENV["SIMULATION"]["X_INIT"]
 Y_INIT                = ENV["SIMULATION"]["Y_INIT"]
 QUEUE_SIZE            = ENV["ROS"]["QUEUE_SIZE"]
 
-step = 0
-
 def run_simulation(sim: simulation):
     """ Run the simulation. """
     print('\n\033[1;36m[i]\033[0m Simulation is runing!')
@@ -46,13 +44,13 @@ def run_simulation(sim: simulation):
 
     # Use the following variables to monitor the number of updates per second.
     begin = time()
-    global step
+    step = 0
 
     try:
         pub = rospy.Publisher('timestep', timestep, queue_size=QUEUE_SIZE)
 
         while True: 
-            sim.p.stepSimulation()
+            sim.step()
             step += 1
 
             # Report simulation speed every thousand steps
@@ -62,7 +60,7 @@ def run_simulation(sim: simulation):
 
             # Create message
             msg = timestep() 
-            msg.timestep = step * SIM_SECONDS_PER_STEP
+            msg.timestep = sim.timestep
             pub.publish(msg)
             
             rate.sleep()
@@ -159,6 +157,8 @@ def priviliged_data_publisher(sim: simulation):
             # Height scan at each toe 
             msg.height_scan      = list(np.reshape(sim.height_scan, -1))
 
+            msg.external_force   = list(sim.external_force)
+
             # Publish
             pub.publish(msg)
             rate.sleep()
@@ -192,9 +192,6 @@ def reset_simulation_subscriber(sim: simulation):
             if data.text == '': terrain_file = sim.terrain_file 
             else: terrain_file = data.text 
             sim.reset(terrain_file, X_INIT, Y_INIT) 
-
-            global step
-            step = 0
 
         rospy.Subscriber("reset_simulation", text, reset)
         print('\033[1;36m[i]\033[0m Topic "reset_simulation" is running!')
@@ -371,7 +368,8 @@ if __name__ == '__main__':
         (sim.update_toes_force, 'toes force'),
         (sim.update_joints_sensors, 'joints'),
         (sim.update_transformation_matrices, 'transformation matrices'),
-        (sim.update_foot_target, 'foot target')
+        (sim.update_foot_target, 'foot target'),
+        (sim.update_external_force, 'external force')
     }
 
     for f, data in update_functions:

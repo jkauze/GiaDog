@@ -28,13 +28,16 @@ from src.transformation_matrix_calculator import \
 with open('.env.json', 'r') as f:
     ENV = json.load(f)
 # Obtenemos las constantes necesarias
-GRAVITY_VECTOR = np.array(ENV["PHYSICS"]["GRAVITY_VECTOR"])
-MESH_SCALE     = ENV["SIMULATION"]["MESH_SCALE"]
-JOINTS_IDS     = ENV["SIMULATION"]["JOINTS_IDS"]
-HIPS_IDS       = ENV["SIMULATION"]["HIPS_IDS"]
-THIGHS_IDS     = ENV["SIMULATION"]["THIGHS_IDS"]
-SHANKS_IDS     = ENV["SIMULATION"]["SHANKS_IDS"]
-TOES_IDS       = ENV["SIMULATION"]["TOES_IDS"]  
+GRAVITY_VECTOR       = np.array(ENV["PHYSICS"]["GRAVITY_VECTOR"])
+MESH_SCALE           = ENV["SIMULATION"]["MESH_SCALE"]
+JOINTS_IDS           = ENV["SIMULATION"]["JOINTS_IDS"]
+HIPS_IDS             = ENV["SIMULATION"]["HIPS_IDS"]
+THIGHS_IDS           = ENV["SIMULATION"]["THIGHS_IDS"]
+SHANKS_IDS           = ENV["SIMULATION"]["SHANKS_IDS"]
+TOES_IDS             = ENV["SIMULATION"]["TOES_IDS"]  
+SIM_SECONDS_PER_STEP = ENV["SIMULATION"]["SIM_SECONDS_PER_STEP"]
+EXTERNAL_FORCE_TIME  = ENV["SIMULATION"]["EXTERNAL_FORCE_TIME"]
+EXTERNAL_FORCE_MAGN  = ENV["SIMULATION"]["EXTERNAL_FORCE_MAGN"]
 
 
 class simulation:
@@ -295,6 +298,55 @@ class simulation:
                 enableSensor = True,
             )
 
+        # Set random external force
+        self.__set_external_force()
+        self.external_force_applied = False
+        self.timestep = 0
+
+    def __apply_force(self, F: List[float]):
+        """
+            Applies a force to the base of the robot.
+
+            Arguments:
+            ----------
+                F: List[float], shape (3,)
+                    Force vector to be applied to the base of the robot.
+                    Expressed in the world frame.
+        """
+
+        self.p.applyExternalForce(
+            self.quadruped, 
+            -1, 
+            F, 
+            [0,0,0], 
+            self.p.WORLD_FRAME
+        )
+    
+    def __set_external_force(self):
+        """
+            Set and randomize the external force applied to the robot base.
+
+            Refrenece:
+            ----------
+                https://github.com/leggedrobotics/learning_quadrupedal_locomotion_over_challenging_terrain_supplementary/blob/master/include/environment/environment_c010.hpp
+                Line: 1575
+        """
+        # The module is a number sampled from 0 to E  Newtons
+        # In the original paper the force is sampled from 0 to 120 Newtons
+        force_module = np.random.uniform() * EXTERNAL_FORCE_MAGN # N
+        
+        # Randomize the direction of the force
+        az = np.pi * np.random.uniform()
+        el = np.pi/2 * np.random.uniform()
+
+        force_norm = np.array([
+            np.cos(az) * np.cos(el),
+            np.sin(az) * np.cos(el),
+            np.sin(el),
+        ])
+
+        self.external_force = force_norm * force_module
+
     def reset(self, terrain_file: str, x_o: float=0.0, y_o: float=0.0):
         """
             Reset simulation.
@@ -364,51 +416,15 @@ class simulation:
             )
         except Exception as e:
             print(f'\033[1;93m[w]\033[0m {e}.')
-            
-    def apply_force_to_base(self, F):
-        """
-        Applies a force to the base of the robot.
-
-        Arguments:
-        ----------
-            F: List[float], shape (3,)
-                Force vector to be applied to the base of the robot.
-                Expressed in the world frame.
-        """
-
-        self.p.applyExternalForce(self.quadruped, -1, F, [0,0,0], 
-                                    self.p.WORLD_FRAME)
-    
-    def get_external_force(self):
-        """
-        Set and randomize the external force applied to the robot base.
-        
-        Arguments:
-        ----------
-            self : object simulation class.
-        Refrenece:
-        https://github.com/leggedrobotics/learning_quadrupedal_locomotion_over_challenging_terrain_supplementary/blob/master/include/environment/environment_c010.hpp
-        Line: 1575
-        """
-        # The module is a number sampled from 0 to 30  Newtons
-        # In the original paper the force is sampled from 0 to 120 Newtons
-        force_module = np.random.uniform() * 30 # N
-        
-        # Randomize the direction of the force
-        az = np.pi * np.random.uniform()
-        el = np.pi/2 * np.random.uniform()
-
-        force_norm = np.array([
-            np.cos(az) * np.cos(el),
-            np.sin(az) * np.cos(el),
-            np.sin(el),
-        ])
-
-        force = force_norm * force_module
-
-        return force
 
     # =========================== UPDATE FUNCTIONS =========================== #
+    def step(self):
+        """
+            Next frame in the simulation.
+        """
+        self.p.stepSimulation()
+        self.timestep += SIM_SECONDS_PER_STEP
+
     def update_position_orientation(self):
         self.position, self.orientation = \
             self.p.getBasePositionAndOrientation(self.quadruped)
@@ -571,6 +587,17 @@ class simulation:
             toe_link_state =  LinkState(*toe_link_state)
             self.foot_target[i] = toe_link_state.linkWorldPosition
 
+    def update_external_force(self):
+        """
+            Update the external force to the base
+        """
+        if self.timestep < EXTERNAL_FORCE_TIME: 
+            self.__apply_force(self.external_force)
+        elif not self.external_force_applied: 
+            self.external_force = [0, 0, 0]
+            self.external_force_applied = True 
+            self.__apply_force(self.external_force)
+
     def update_sensor_output(self):
         """
             Updates the sensor states for the current simulation steps.
@@ -612,6 +639,8 @@ class simulation:
         self.update_toes_force()
         self.update_joints_sensors()
         self.update_transformation_matrices()
+        self.update_external_force()
+
 
     # =========================== DEBUGGING FUNCTIONS =========================== #
     def set_toes_friction_coefficients(self, friction_coefficient: float):

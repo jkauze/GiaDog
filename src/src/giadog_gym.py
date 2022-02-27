@@ -48,7 +48,6 @@ TERRAIN_FILE         = ENV["SIMULATION"]["TERRAIN_FILE"]
 MESH_SCALE           = ENV["SIMULATION"]["MESH_SCALE"]
 ROWS                 = ENV["SIMULATION"]["ROWS"]
 COLS                 = ENV["SIMULATION"]["COLS"]
-SIM_SECONDS_PER_STEP = ENV["SIMULATION"]["SIM_SECONDS_PER_STEP"]
 HISTORY_LEN          = ENV["NEURAL_NETWORK"]["HISTORY_LEN"]
 
 
@@ -392,7 +391,7 @@ class teacher_giadog_env(gym.Env):
         self.toes_force2     = p_data.toes_force2     
         self.ground_friction = p_data.ground_friction 
         self.height_scan     = np.reshape(p_data.height_scan, (4,9)) 
-        self.external_force  = np.zeros((3,))
+        self.external_force  = p_data.external_force
 
         v = int(np.array(self.linear_vel[:2]) @ self.command_dir > MIN_DESIRED_VEL)
         self.E_v.append(v)
@@ -401,10 +400,10 @@ class teacher_giadog_env(gym.Env):
         """
             Update data from simulation
         """
-        self.sim.p.stepSimulation()
+        self.sim.step()
         self.sim.update_sensor_output()
 
-        self.timestep += SIM_SECONDS_PER_STEP
+        self.timestep = self.sim.timestep
 
         self.position    = self.sim.position
         self.orientation = self.sim.orientation
@@ -421,6 +420,7 @@ class teacher_giadog_env(gym.Env):
         self.foot_target_hist[0]   = np.reshape(self.sim.foot_target, (4,3))
 
         self.transf_matrix = self.sim.transf_matrix
+        self.external_force = self.sim.external_force
 
         if self.count == 1000:
             vel = 1000 / (time() - self.begin_time)

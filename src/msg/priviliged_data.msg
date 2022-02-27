@@ -12,3 +12,5 @@ float32[] ground_friction
 
 # Height scan at each toe 
 float32[] height_scan
+
+float32[] external_force
