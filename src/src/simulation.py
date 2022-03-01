@@ -123,7 +123,7 @@ class simulation:
         self.ftg_frequencies    = np.zeros([4])
         self.base_frequency     = np.zeros([1])
         
-        # Priviledge data
+        # Priviliged data
         self.normal_toe               = np.zeros([4, 3])
         self.normal_force_at_each_toe = np.zeros([4]) # (Foot contact forces?¿)
         self.toes_contact             = np.zeros([4], dtype=np.int8)
@@ -131,22 +131,19 @@ class simulation:
         self.shanks_contact           = np.zeros([4], dtype=np.int8)
         self.height_scan              = np.zeros([4, 9])
         self.toes_force1              = np.zeros([4])
+        # Extra sensor (This may be used in the future)
+        self.toes_force2              = np.zeros(4) 
         self.ground_friction          = np.zeros([4])
-
-        # For debug:
-        self.height_scan_lines = np.zeros([4,9,2,3])
-        self.external_force_applied_to_the_base = np.zeros([3])
+        self.transf_matrix            = np.zeros((4,4,4))
+        self.external_force           = np.zeros([3])
 
         # Data only for reward purposes
         self.joint_torques = np.zeros(12)
+        self.foot_target   = np.zeros((4,3))
+        self.is_fallen     = False
 
-        # Extra sensor (This may be used in the future)
-        self.toes_force2 = np.zeros(4) 
-
-        # Transformation matrices from the hip to the leg base
-        self.transf_matrix = np.zeros((4,4,4))
-
-        self.foot_target = np.zeros((4,3))
+        # For debug:
+        self.height_scan_lines = np.zeros([4,9,2,3])
 
     @staticmethod
     def __get_foot_height_scan_coordinates(x: float, y: float, alpha: float) -> np.array:
@@ -598,6 +595,28 @@ class simulation:
             self.external_force_applied = True 
             self.__apply_force(self.external_force)
 
+    def update_is_fallen(self):
+        """
+            Update the state that indicates whether the quadruped has fallen.
+
+            If the up directions between the base and the world is larger (the dot
+            product is smaller than 0.55), spot is considered fallen.
+            
+            There was a second condition in the original code, but it was not 
+                implemented as it caused early termination of the simulation.
+            
+            The condition was the following: The base is very low on the ground
+            (the height is smaller than 0.13 meter).
+
+            Reference:
+            ----------
+                Minitaur enviroment (an original pybullet RL enviroment)
+        """
+        rot_mat = self.p.getMatrixFromQuaternion(
+            self.p.getQuaternionFromEuler(self.orientation)
+        )
+        self.is_fallen = rot_mat[8] < 0.55
+
     def update_sensor_output(self):
         """
             Updates the sensor states for the current simulation steps.
@@ -640,41 +659,8 @@ class simulation:
         self.update_joints_sensors()
         self.update_transformation_matrices()
         self.update_external_force()
+        self.update_is_fallen()
 
-
-    def is_fallen(self):
-        """
-        Decide whether the quadruped has fallen.
-
-        If the up directions between the base and the world is larger (the dot
-        product is smaller than 0.55), spot is considered fallen.
-        
-        There was a second condition in the original code, but it was not 
-            implemented as it caused early termination of the simulation.
-        
-        The condition was the following: The base is very low on the ground
-        (the height is smaller than 0.13 meter).
-        
-        Arguments:
-        ----------
-            None
-
-        Returns:
-        -------
-            Boolean value that indicates whether spot has fallen.
-
-        Reference:
-        ----------
-        minitaur enviroment (an original pybullet RL enviroment)
-        """
-        print(self.orientation)
-        rot_mat = self.p.getMatrixFromQuaternion(
-            self.p.getQuaternionFromEuler(self.orientation))
-        local_up = rot_mat[6:]
-        #pos = self.position
-        # 
-        return (np.dot(np.asarray([0, 0, 1]), np.asarray(local_up)) < 0.55) \
-               # or pos[2] < 0.13
     # =========================== DEBUGGING FUNCTIONS =========================== #
     def set_toes_friction_coefficients(self, friction_coefficient: float):
         """

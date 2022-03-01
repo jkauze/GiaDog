@@ -118,6 +118,7 @@ def normal_data_publisher(sim: simulation):
             msg.transf_matrix     = list(np.reshape(sim.transf_matrix, -1))
 
             msg.foot_target       = list(np.reshape(sim.foot_target, -1))
+            msg.is_fallen         = sim.is_fallen
 
             # Publish
             pub.publish(msg)

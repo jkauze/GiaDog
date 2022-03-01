@@ -201,8 +201,9 @@ class teacher_giadog_env(gym.Env):
         self.base_freq = BASE_FREQ
         self.gravity_vector = GRAVITY_VECTOR
         self.target_dir = np.zeros((2,))
+        self.is_fallen = False
         self.timestep = 0
-        self.E_v = []
+        self.trajectory = []
 
         self.sim = sim
         if self.sim == None:
@@ -383,6 +384,7 @@ class teacher_giadog_env(gym.Env):
         N = self.FOOT_HISTORY_LEN
         self.foot_target_hist[1:N] = self.foot_target_hist[0:N-1]
         self.foot_target_hist[0]   = np.reshape(n_data.foot_target, (4,3))
+        self.is_fallen             = n_data.is_fallen
 
         # Priviliged data
         self.joint_torques   = p_data.joint_torques 
@@ -394,7 +396,7 @@ class teacher_giadog_env(gym.Env):
         self.external_force  = p_data.external_force
 
         v = int(np.array(self.linear_vel[:2]) @ self.command_dir > MIN_DESIRED_VEL)
-        self.E_v.append(v)
+        self.trajectory.append(v)
 
     def __update_obs_sim(self):
         """
@@ -431,7 +433,7 @@ class teacher_giadog_env(gym.Env):
             self.count += 1
 
         v = int(np.array(self.sim.linear_vel[:2]) @ self.command_dir > MIN_DESIRED_VEL)
-        self.E_v.append(v)
+        self.trajectory.append(v)
 
     def __terminate(self) -> bool:
         """
@@ -441,8 +443,7 @@ class teacher_giadog_env(gym.Env):
         d_vector = self.target_dir - np.array(self.position[:2])
         d = d_vector @ d_vector
 
-        return d < GOAL_RADIUS_2 or self.timestep > MAX_ITER_TIME\
-                 or self.sim.is_fallen()
+        return d < GOAL_RADIUS_2 or self.timestep > MAX_ITER_TIME or self.sim.is_fallen
 
     def get_obs(self) -> Dict[str, Any]: 
         """
@@ -542,11 +543,11 @@ class teacher_giadog_env(gym.Env):
             self.count = 0
             self.begin_time = time()
 
-        self.E_v = []
+        self.trajectory = []
 
     def traverability(self) -> float:
         """
             Calculate the current transversability
         """
-        if len(self.E_v) == 0: return 0
-        return sum(self.E_v) / len(self.E_v)
+        if len(self.trajectory) == 0: return 0
+        return sum(self.trajectory) / len(self.trajectory)

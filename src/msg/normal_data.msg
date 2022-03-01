@@ -19,3 +19,4 @@ float32[] joint_velocities
 float32[] transf_matrix
 
 float32[] foot_target
+bool is_fallen

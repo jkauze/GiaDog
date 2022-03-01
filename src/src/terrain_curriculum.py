@@ -4,6 +4,7 @@
 
     [TODO]
 """
+import threading
 from typing import *
 from src.giadog_gym import *
 from src.neural_networks import *
@@ -79,8 +80,9 @@ class terrain_curriculum:
     """
         [TODO]
     """
-    def __init__(self, gym_env: teacher_giadog_env, model: teacher_nn):
-        self.gym_env = gym_env 
+    def __init__(self, gym_envs: List[teacher_giadog_env], model: teacher_nn):
+        assert len(gym_envs) > 0, 'Must be one or more gym environments.'
+        self.gym_envs = gym_envs 
         self.model = model
 
         hills_C_t  = [
@@ -96,8 +98,10 @@ class terrain_curriculum:
             for _ in range(N_PARTICLES)
         ]
         self.C_t = hills_C_t + steps_C_t + stairs_C_t
-
         self.C_t_history  = [[p.copy() for p in self.C_t]]
+
+        self.trajectories: List[List[float]] = [None] * len(self.C_t) * N_TRAJ
+        self.availability: List[bool] = [True] * len(gym_envs)
 
     def __compute_measurement_probs(self):
         """
@@ -109,19 +113,36 @@ class terrain_curriculum:
                 for t in p.traverability
             ) / (N_TRAJ * N_EVALUATE)
 
-    def __compute_traverability(self):
+    def __compute_trajectory(self, i: int, k: int, l: int, m: int):
         """
             [TODO]
         """
+        p = self.C_t[l]
+
+        # Generate terrain using C_t
+        self.gym_envs[i].make_terrain(
+            p.type,
+            rows=ROWS,
+            cols=ROWS,
+            seed=randint(0, 1e6),
+            **p.parameters
+        )
+        self.gym_envs[i].reset(TERRAIN_FILE)
+
+        # Run policy and compute traverability
         done = False
-        obs = self.gym_env.get_obs()
+        obs = self.gym_envs[i].get_obs()
         while not done:
             # Obtenemos la accion de la politica
             action = self.model.predict_obs(obs)
             # Aplicamos la accion al entorno
-            obs, reward, done, info = self.gym_env.step(action)
+            obs, reward, done, info = self.gym_envs[i].step(action)
 
-        return self.gym_env.traverability()
+        p.traverability[k * N_EVALUATE + m] = self.gym_envs[i].traverability()
+        self.trajectories[l * len(self.C_t) + m] = self.gym_envs[i].trajectory
+
+        self.availability[i] = True
+        print(f'Traverability: {p.traverability[k * N_EVALUATE + m]}')
 
     def __update_weights(self):
         """
@@ -178,22 +199,21 @@ class terrain_curriculum:
         """
         while True:
             for k in range(N_EVALUATE):
-                for p in self.C_t:
+                for l in range(len(self.C_t)):
                     for m in range(N_TRAJ):
-                        # Generate terrain using C_t
-                        self.gym_env.make_terrain(
-                            p.type,
-                            rows=ROWS,
-                            cols=ROWS,
-                            seed=randint(0, 1e6),
-                            **p.parameters
-                        )
-                        self.gym_env.reset(TERRAIN_FILE)
+                        # Obtenemos un entorno disponible
+                        while all(not available for available in self.availability): pass
+                        i = self.availability.index(True)
+                        self.availability[i] = False
 
-                        # Run policy and compute traverability
-                        index = k * N_EVALUATE + m
-                        p.traverability[index] = self.__compute_traverability()
-                        print(f'Traverability: {p.traverability[index]}')
+                        t = threading.Thread(
+                            target=self.__compute_trajectory,
+                            args=(i, k, l, m)
+                        )
+                        t.start()
+                # Esperamos que todos los hilos restantes terminen
+                while any(not available for available in self.availability): pass
+                
                 # Update policy using TRPO
                 # [TODO]
             

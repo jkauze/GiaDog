@@ -96,27 +96,49 @@ if __name__ == '__main__':
         help='Path to the URDF file of the quadruped robot.',
         metavar='PATH'
     )
+    parser.add_argument(
+        '-t', '--threads',
+        type=int,
+        default='1',
+        help='Number of threads to parallelize execution. It must be positive. It ' +\
+            'can only be greater than 1 if the -r,--ros flag is not used.',
+        metavar='THREADS'
+    )
 
     args = parser.parse_args()
     
     terrain = terrain_gen.steps(ROWS, COLS, 0.7, 0.0, 1)
     terrain_gen.save(terrain, TERRAIN_FILE)
 
+    init_terrain_args = {
+        'type'   : 'steps', 
+        'rows'   : ROWS, 
+        'cols'   : COLS, 
+        'width'  : 0.7, 
+        'height' : 0.0, 
+        'seed'   : 1
+    }
+
     if args.ros:
         rospy.init_node('train', anonymous=True)
         sim = None 
+        train_envs = [teacher_giadog_env(sim)]
+        train_envs[0].make_terrain(**init_terrain_args)
+
     else:
         # Initialize simulation
-        print('\033[1;36m[i]\033[0m Starting simulation')
-        sim = simulation(args.spot_urdf, bullet_server=p, gui=args.gui)
-        sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
-        sim.reset(TERRAIN_FILE, X_INIT, Y_INIT)
+        print('\033[1;36m[i]\033[0m Starting simulations')
 
-    train_env = teacher_giadog_env(sim)
-    train_env.make_terrain('steps', rows=ROWS, cols=COLS, width=0.7, height=0.0, seed=1)
-    
+        train_envs = []
+        for _ in range(args.threads):
+            sim = simulation(args.spot_urdf, bullet_server=p, gui=args.gui)
+            sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
+            sim.reset(TERRAIN_FILE, X_INIT, Y_INIT)
+
+            train_envs.append(teacher_giadog_env(sim))
+            train_envs[-1].make_terrain(**init_terrain_args)
+
     print('Running!')
-    
-    tc = terrain_curriculum(train_env, teacher_nn())
+    tc = terrain_curriculum(train_envs, teacher_nn())
     tc.train()
 
