@@ -34,7 +34,11 @@ JOINTS_IDS     = ENV["SIMULATION"]["JOINTS_IDS"]
 HIPS_IDS       = ENV["SIMULATION"]["HIPS_IDS"]
 THIGHS_IDS     = ENV["SIMULATION"]["THIGHS_IDS"]
 SHANKS_IDS     = ENV["SIMULATION"]["SHANKS_IDS"]
-TOES_IDS       = ENV["SIMULATION"]["TOES_IDS"]  
+TOES_IDS       = ENV["SIMULATION"]["TOES_IDS"] 
+
+LEG_SPAN = ENV["ROBOT"]["LEG_SPAN"]
+H_OFF    = ENV["ROBOT"]["H_OFF"]
+
 
 
 class simulation:
@@ -129,10 +133,10 @@ class simulation:
         self.height_scan              = np.zeros([4, 9])
         self.toes_force1              = np.zeros([4])
         self.ground_friction          = np.zeros([4])
-
+        self.external_force_applied_to_the_base = np.zeros([3])
         # For debug:
         self.height_scan_lines = np.zeros([4,9,2,3])
-        self.external_force_applied_to_the_base = np.zeros([3])
+        
 
         # Data only for reward purposes
         self.joint_torques = np.zeros(12)
@@ -143,7 +147,9 @@ class simulation:
         # Transformation matrices from the hip to the leg base
         self.transf_matrix = np.zeros((4,4,4))
 
-        self.foot_target = np.zeros((4,3))
+        #self.feet_target_pos = np.zeros((4,3))
+
+        self.feet_current_pos = np.zeros([4, 3])
 
     @staticmethod
     def __get_foot_height_scan_coordinates(x: float, y: float, alpha: float) -> np.array:
@@ -181,8 +187,8 @@ class simulation:
             contact_points_info: List[ContactInfo]
         ) -> Tuple[float, float, np.array]: 
         """
-            Given a robot toe position and orientation, returns the positions of the toe 
-            height sensor coordinates.
+            Given a robot toe position and orientation, returns the positions of 
+            the toe height sensor coordinates.
 
             Arguments:
             ----------
@@ -386,6 +392,7 @@ class simulation:
         Arguments:
         ----------
             self : object simulation class.
+        
         Refrenece:
         https://github.com/leggedrobotics/learning_quadrupedal_locomotion_over_challenging_terrain_supplementary/blob/master/include/environment/environment_c010.hpp
         Line: 1575
@@ -560,16 +567,29 @@ class simulation:
         """
             Update the transformation matrices from the hip to the leg base.
         """
-        self.transf_matrix = get_leg_to_horizontal_frame_transformations(self.base_rpy)
+        self.transf_matrix = get_leg_to_horizontal_frame_transformations(
+                                                                self.base_rpy)
 
-    def update_foot_target(self):
+    
+    def update_feet_current_positions(self):
         """
-            Update the current foot target (position).
+            Update the current foot position, relative to the Hi frame 
+            below each hip
         """
         toes_info = self.p.getLinkStates(self.quadruped, TOES_IDS)
-        for i, toe_link_state in enumerate(toes_info):
+        hips_info = self.p.getLinkStates(self.quadruped, HIPS_IDS)
+
+        for i, (toe_link_state, hips_info) in enumerate(zip(toes_info, hips_info)):
             toe_link_state =  LinkState(*toe_link_state)
-            self.foot_target[i] = toe_link_state.linkWorldPosition
+            hip_link_state =  LinkState(*hip_link_state)
+
+            hip_pos = np.array(hip_link_state.worldLinkFramePosition)
+            toe_pos = np.array(toe_link_state.worldLinkFramePosition)
+            self.feet_current_pos[i] = toe_link_state.linkWorldPosition
+            # We calculate the Hi frame  relative to the leg base position (hip)
+            p_li_Hi = np.array([0, H_OFF * (-1)**i, -LEG_SPAN])
+            
+            self.feet_current_pos[i] = toe_pos -  hip_pos - p_li_Hi
 
     def update_sensor_output(self):
         """
@@ -612,6 +632,8 @@ class simulation:
         self.update_toes_force()
         self.update_joints_sensors()
         self.update_transformation_matrices()
+        self.update_feet_current_positions()
+
 
     def is_fallen(self):
         """
@@ -621,7 +643,7 @@ class simulation:
         product is smaller than 0.55), spot is considered fallen.
         
         There was a second condition in the original code, but it was not 
-            implemented as it caused early termination of the simulation.
+        implemented as it caused early termination of the simulation.
         
         The condition was the following: The base is very low on the ground
         (the height is smaller than 0.13 meter).
@@ -646,7 +668,9 @@ class simulation:
         # 
         return (np.dot(np.asarray([0, 0, 1]), np.asarray(local_up)) < 0.55) \
                # or pos[2] < 0.13
-    # =========================== DEBUGGING FUNCTIONS =========================== #
+    
+    
+    # =========================== DEBUGGING FUNCTIONS ======================== #
     def set_toes_friction_coefficients(self, friction_coefficient: float):
         """
             Changes the friction coeficient of the quadruped toes. It sets the 
@@ -654,8 +678,8 @@ class simulation:
 
             Arguments:
             ---------
-                friction_coefficient: float
-                    The desired friction coeficient to be set on the quadruped toes.
+            friction_coefficient: float
+                The desired friction coeficient to be set on the quadruped toes.
         """
         for toe_id in TOES_IDS:
             self.p.changeDynamics(self.quadruped, toe_id, 
@@ -663,8 +687,8 @@ class simulation:
 
     def draw_reference_frame(self, R: np.array, p: np.array, scaling: float=0.05):
         """
-            Draws debug lines of a refrence frame represented by the rotation R and 
-            the position vector p, in the world frame.
+            Draws debug lines of a refrence frame represented by the rotation R 
+            and the position vector p, in the world frame.
 
             Arguments:
             ----------
