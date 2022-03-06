@@ -13,6 +13,7 @@ from typing import *
 # Simulacion
 import pybullet as p
 from src.bullet_dataclasses import *
+import pybullet_utils.bullet_client as bc
 
 # Array usage
 import numpy as np
@@ -45,18 +46,14 @@ class simulation:
     def __init__(
             self,
             giadog_urdf_file: str,
-            bullet_server,
             gui: bool=False,
-            self_collision_enabled: bool=False,
+            self_collision_enabled: bool=False,\
         ): 
         """
             Arguments:
             ----------
                 giadog_urdf_file: str 
                     Path to the URDF file of the quadruped robot.
-
-                bullet_server: module 
-                    Pybullet module.
 
                 gui: bool, optional
                     Indicates if the simulation GUI will be displayed.
@@ -67,10 +64,8 @@ class simulation:
                     Default: False
         """
         self.giadog_urdf_file = giadog_urdf_file
-        self.p = bullet_server
+        self.p = bc.BulletClient(connection_mode=p.GUI if gui else p.DIRECT)
         self.self_collision_enabled = self_collision_enabled
-        
-        self.p.connect(self.p.GUI if gui else self.p.DIRECT)
 
     def __get_terrain_height(self, x: float, y: float) -> float:
         """

@@ -4,8 +4,8 @@
 
     [TODO]
 """
-import threading
 from typing import *
+import multiprocessing
 from src.giadog_gym import *
 from src.neural_networks import *
 from dataclasses import dataclass
@@ -206,11 +206,11 @@ class terrain_curriculum:
                         i = self.availability.index(True)
                         self.availability[i] = False
 
-                        t = threading.Thread(
+                        p = multiprocessing.Process(
                             target=self.__compute_trajectory,
                             args=(i, k, l, m)
                         )
-                        t.start()
+                        p.start()
                 # Esperamos que todos los hilos restantes terminen
                 while any(not available for available in self.availability): pass
                 

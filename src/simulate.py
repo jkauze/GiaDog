@@ -345,7 +345,7 @@ if __name__ == '__main__':
 
     # Initialize simulation
     print('\033[1;36m[i]\033[0m Starting simulation')
-    sim = simulation(args.spot_urdf, bullet_server=p, gui=args.gui)
+    sim = simulation(args.spot_urdf, gui=args.gui)
     sim.reset(terrain_file, X_INIT, Y_INIT) 
 
     # Run rosnode for spot-mini

@@ -424,8 +424,8 @@ class teacher_giadog_env(gym.Env):
         self.transf_matrix = self.sim.transf_matrix
         self.external_force = self.sim.external_force
 
-        if self.count == 1000:
-            vel = 1000 / (time() - self.begin_time)
+        if self.count == 100:
+            vel = 100 / (time() - self.begin_time)
             print(f'Executing approximately {vel} steps per second.')
             self.count = 0
             self.begin_time = time()

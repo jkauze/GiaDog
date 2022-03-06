@@ -2,7 +2,6 @@
 import json
 import pathlib
 import argparse
-import pybullet as p
 from time import time, sleep
 from src.giadog_gym import *
 from src.terrain_curriculum import *
@@ -131,7 +130,7 @@ if __name__ == '__main__':
 
         train_envs = []
         for _ in range(args.threads):
-            sim = simulation(args.spot_urdf, bullet_server=p, gui=args.gui)
+            sim = simulation(args.spot_urdf, gui=args.gui)
             sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
             sim.reset(TERRAIN_FILE, X_INIT, Y_INIT)
 
