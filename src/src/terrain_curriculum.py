@@ -4,12 +4,12 @@
 
     [TODO]
 """
+import pickle
 from typing import *
-import multiprocessing
 from src.giadog_gym import *
-from src.neural_networks import *
 from dataclasses import dataclass
 from random import randint, choice, choices, uniform
+from multiprocessing import Process, Queue, JoinableQueue
 
 
 # Cargamos las variables de entorno
@@ -76,14 +76,63 @@ class particle:
 
         return string
 
+class trajectory_generator(Process):
+    """
+        [TODO]
+    """
+    def __init__(
+            self, 
+            gym_env: teacher_giadog_env, 
+            task_queue: JoinableQueue,
+            result_queue: Queue
+        ):
+        Process.__init__(self)
+        self.gym_env = gym_env
+        self.task_queue = task_queue
+        self.result_queue = result_queue
+
+    def run(self):
+        from src.neural_networks import teacher_nn
+        
+        while True:
+            # Get task
+            p, k, m = self.task_queue.get()
+            with open('modelo.pickle', 'rb') as file:
+                model = pickle.load(file)
+
+            # Generate terrain using C_t
+            self.gym_env.make_terrain(
+                p.type,
+                rows=ROWS,
+                cols=ROWS,
+                seed=randint(0, 1e6),
+                **p.parameters
+            )
+            self.gym_env.reset(TERRAIN_FILE)
+
+            # Run policy and compute traverability
+            done = False
+            obs = self.gym_env.get_obs()
+            while not done:
+                # Obtenemos la accion de la politica
+                action = model.predict_obs(obs)
+                # Aplicamos la accion al entorno
+                obs, reward, done, info = self.gym_env.step(action)
+
+            p.traverability[k * N_EVALUATE + m] = self.gym_env.traverability()
+            trajectory = self.gym_env.trajectory
+            print(f'Traverability: {p.traverability[k * N_EVALUATE + m]}')
+
+            self.task_queue.task_done()
+            self.result_queue.put((p, trajectory))
+
+
 class terrain_curriculum:
     """
         [TODO]
     """
-    def __init__(self, gym_envs: List[teacher_giadog_env], model: teacher_nn):
+    def __init__(self, gym_envs: List[teacher_giadog_env]):
         assert len(gym_envs) > 0, 'Must be one or more gym environments.'
-        self.gym_envs = gym_envs 
-        self.model = model
 
         hills_C_t  = [
             particle('hills', INIT_VALUES['hills'].copy(), [0] * N_TRAJ * N_EVALUATE) 
@@ -100,8 +149,21 @@ class terrain_curriculum:
         self.C_t = hills_C_t + steps_C_t + stairs_C_t
         self.C_t_history  = [[p.copy() for p in self.C_t]]
 
-        self.trajectories: List[List[float]] = [None] * len(self.C_t) * N_TRAJ
-        self.availability: List[bool] = [True] * len(gym_envs)
+        p = Process(target=self.__new_model)
+        p.start()
+        self.tasks = JoinableQueue()
+        self.results = Queue()
+        self.traj_generators = [
+            trajectory_generator(env, self.tasks, self.results) for env in gym_envs
+        ]
+        for generator in self.traj_generators: generator.start()
+
+    @staticmethod
+    def __new_model():
+        from src.neural_networks import teacher_nn
+
+        with open('modelo.pickle', 'wb') as file:
+            pickle.dump(teacher_nn(), file)
 
     def __compute_measurement_probs(self):
         """
@@ -112,37 +174,6 @@ class terrain_curriculum:
                 int(MIN_DESIRED_TRAV <= t <= MAX_DESIRED_TRAV)
                 for t in p.traverability
             ) / (N_TRAJ * N_EVALUATE)
-
-    def __compute_trajectory(self, i: int, k: int, l: int, m: int):
-        """
-            [TODO]
-        """
-        p = self.C_t[l]
-
-        # Generate terrain using C_t
-        self.gym_envs[i].make_terrain(
-            p.type,
-            rows=ROWS,
-            cols=ROWS,
-            seed=randint(0, 1e6),
-            **p.parameters
-        )
-        self.gym_envs[i].reset(TERRAIN_FILE)
-
-        # Run policy and compute traverability
-        done = False
-        obs = self.gym_envs[i].get_obs()
-        while not done:
-            # Obtenemos la accion de la politica
-            action = self.model.predict_obs(obs)
-            # Aplicamos la accion al entorno
-            obs, reward, done, info = self.gym_envs[i].step(action)
-
-        p.traverability[k * N_EVALUATE + m] = self.gym_envs[i].traverability()
-        self.trajectories[l * len(self.C_t) + m] = self.gym_envs[i].trajectory
-
-        self.availability[i] = True
-        print(f'Traverability: {p.traverability[k * N_EVALUATE + m]}')
 
     def __update_weights(self):
         """
@@ -199,21 +230,22 @@ class terrain_curriculum:
         """
         while True:
             for k in range(N_EVALUATE):
-                for l in range(len(self.C_t)):
+                # We add the tasks for the trajectory generators
+                for p in self.C_t:
                     for m in range(N_TRAJ):
-                        # Obtenemos un entorno disponible
-                        while all(not available for available in self.availability): pass
-                        i = self.availability.index(True)
-                        self.availability[i] = False
+                        self.tasks.put((p, k, m))
 
-                        p = multiprocessing.Process(
-                            target=self.__compute_trajectory,
-                            args=(i, k, l, m)
-                        )
-                        p.start()
-                # Esperamos que todos los hilos restantes terminen
-                while any(not available for available in self.availability): pass
+                # Wait for all of the tasks to finish
+                self.tasks.join()
                 
+                N = len(self.C_t)
+                self.C_t = []
+                self.trajectories = []
+                for _ in range(N * N_TRAJ):
+                    new_p, trajectory = self.results.get()
+                    self.C_t.append(new_p)
+                    self.trajectories.append(trajectory)
+
                 # Update policy using TRPO
                 # [TODO]
             

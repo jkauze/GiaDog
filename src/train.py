@@ -9,7 +9,6 @@ try: import rospy
 except: pass
 
 from src.agents import teacher_agent, ars_agent
-from src.neural_networks import teacher_nn
 
 
 # Cargamos las variables de entorno
@@ -138,6 +137,6 @@ if __name__ == '__main__':
             train_envs[-1].make_terrain(**init_terrain_args)
 
     print('Running!')
-    tc = terrain_curriculum(train_envs, teacher_nn())
+    tc = terrain_curriculum(train_envs)
     tc.train()
 
