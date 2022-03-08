@@ -92,7 +92,7 @@ class trajectory_generator(Process):
         self.result_queue = result_queue
 
     def run(self):
-        from src.neural_networks import teacher_nn
+        #from src.neural_networks import teacher_nn
         
         while True:
             # Get task
@@ -160,6 +160,7 @@ class terrain_curriculum:
 
     @staticmethod
     def __new_model():
+        return
         from src.neural_networks import teacher_nn
 
         with open('modelo.pickle', 'wb') as file:

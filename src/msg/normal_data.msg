@@ -18,5 +18,5 @@ float32[] joint_velocities
 # Transformation matrices
 float32[] transf_matrix
 
-float32[] foot_target
+float32[] feet_current_pos
 bool is_fallen

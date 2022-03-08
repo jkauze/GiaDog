@@ -27,7 +27,6 @@ except:
     print(f'\033[1;93m[w]\033[0m Warning: Executing giadog_gym without ROS.')
 
 # Controller
-from src.neural_networks import *
 from src.inverse_kinematics import *
 from src.foot_trajectory_generator import *
 
@@ -147,7 +146,7 @@ class teacher_giadog_env(gym.Env):
                 high = np.inf * np.ones((self.JOINT_VEL_HISTORY_LEN, 12)),
                 dtype = np.float
             ),
-            'foot_target_hist': spaces.Box(
+            'feet_target_hist': spaces.Box(
                 low = -np.inf * np.ones((self.FOOT_HISTORY_LEN, 4, 3)),
                 high = np.inf * np.ones((self.FOOT_HISTORY_LEN, 4, 3)),
                 dtype = np.float
@@ -189,10 +188,11 @@ class teacher_giadog_env(gym.Env):
             dtype = np.float32
         )
 
-        self.H = np.zeros((HISTORY_LEN, controller_neural_network.NORMAL_DATA_SHAPE))
-        self.foot_target_hist = np.zeros((self.FOOT_HISTORY_LEN, 4, 3))
+        self.H = np.zeros((HISTORY_LEN, 60))
+        self.feet_target_hist = np.zeros((self.FOOT_HISTORY_LEN, 4, 3))
         self.joint_vel_hist = np.zeros((self.JOINT_VEL_HISTORY_LEN, 12))
         self.joint_err_hist = np.zeros((self.JOINT_ERR_HISTORY_LEN, 12))
+        self.joint_angles = np.zeros((12,))
         self.joint_velocities = np.zeros((12,))
         self.transf_matrix = np.zeros((4,4,4))
         self.external_force  = np.zeros((3,))
@@ -348,7 +348,7 @@ class teacher_giadog_env(gym.Env):
         r_bc = - sum(state.thighs_contact) - sum(state.shanks_contact)
 
         # Target Smoothness Reward
-        r_fd_T = np.reshape(self.foot_target_hist, (self.FOOT_HISTORY_LEN,-1))
+        r_fd_T = np.reshape(self.feet_target_hist, (self.FOOT_HISTORY_LEN,-1))
         r_s = -np.linalg.norm(r_fd_T[0] - 2.0 * r_fd_T[1] + r_fd_T[2])
 
         # Torque Reward
@@ -376,15 +376,15 @@ class teacher_giadog_env(gym.Env):
         self.thighs_contact        = n_data.thighs_contact 
         self.shanks_contact        = n_data.shanks_contact 
         self.joint_angles          = n_data.joint_angles 
+
         N = self.JOINT_VEL_HISTORY_LEN
         self.joint_vel_hist[1:N]   = self.joint_vel_hist[0:N-1]
         self.joint_vel_hist[0]     = self.joint_velocities
+
         self.joint_velocities      = n_data.joint_velocities  
-        self.transf_matrix    = np.reshape(n_data.transf_matrix, (4,4,4))
-        N = self.FOOT_HISTORY_LEN
-        self.foot_target_hist[1:N] = self.foot_target_hist[0:N-1]
-        self.foot_target_hist[0]   = np.reshape(n_data.foot_target, (4,3))
+        self.transf_matrix         = np.reshape(n_data.transf_matrix, (4,4,4))
         self.is_fallen             = n_data.is_fallen
+        self.foot_current_pos      = n_data.foot_current_pos
 
         # Priviliged data
         self.joint_torques   = p_data.joint_torques 
@@ -411,15 +411,12 @@ class teacher_giadog_env(gym.Env):
         self.orientation = self.sim.orientation
         self.command_dir = self.target_dir - np.array(self.position[:2])
         self.command_dir = self.command_dir / np.linalg.norm(self.command_dir)
+        self.joint_angles = self.sim.joint_angles
 
         N = self.JOINT_VEL_HISTORY_LEN
         self.joint_vel_hist[1:N]   = self.joint_vel_hist[0:N-1]
         self.joint_vel_hist[0]     = self.joint_velocities
         self.joint_velocities      = self.sim.joint_velocities 
-
-        N = self.FOOT_HISTORY_LEN
-        self.foot_target_hist[1:N] = self.foot_target_hist[0:N-1]
-        self.foot_target_hist[0]   = np.reshape(self.sim.foot_target, (4,3))
 
         self.transf_matrix = self.sim.transf_matrix
         self.external_force = self.sim.external_force
@@ -465,7 +462,7 @@ class teacher_giadog_env(gym.Env):
             'base_freq'        : self.base_freq,
             'joint_err_hist'   : self.joint_err_hist,
             'joint_vel_hist'   : self.joint_vel_hist,
-            'foot_target_hist' : self.foot_target_hist,
+            'feet_target_hist' : self.feet_target_hist,
             'toes_contact'     : state.toes_contact,
             'thighs_contact'   : state.thighs_contact,
             'shanks_contact'   : state.shanks_contact,
@@ -485,20 +482,20 @@ class teacher_giadog_env(gym.Env):
             [TODO]
         """
         ftg_data = calculate_foot_trajectories(action, self.timestep)
-        target_foot_positions, self.ftg_freqs, self.ftg_phases = ftg_data
+        self.feet_target_pos, self.ftg_freqs, self.ftg_phases = ftg_data
         self.ftg_phases = np.reshape(self.ftg_phases, -1)
 
-        joints_angles = []
+        joints_angles_target = []
         for i in range(4):
-            r_o = target_foot_positions[i]
+            r_o = self.feet_target_pos[i]
             T_i = self.transf_matrix[i]
             r = T_i @ np.concatenate((r_o, [1]), axis = 0)
             r = r[:3]
 
             leg_angles = solve_leg_IK("LEFT" if i%2 == 0 else "RIGHT", r)
-            joints_angles += list(leg_angles)
+            joints_angles_target += list(leg_angles)
 
-        self.__actuate_joints(joints_angles)
+        self.__actuate_joints(joints_angles_target)
 
         observation = self.get_obs()
         reward = self.__get_reward()
@@ -506,6 +503,11 @@ class teacher_giadog_env(gym.Env):
         info = {}    # TODO
 
         if self.sim != None: self.__update_obs_sim()
+
+        N = self.JOINT_ERR_HISTORY_LEN
+        self.feet_target_hist[1:N] = self.feet_target_hist[0:N-1]
+        joint_err = np.abs(np.array(joints_angles_target) - np.array(self.joint_angles))
+        self.feet_target_hist[0]   = np.reshape(joint_err, (4,3))
 
         return observation, reward, done, info
 

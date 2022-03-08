@@ -117,7 +117,7 @@ def normal_data_publisher(sim: simulation):
             # Tranformation matrices
             msg.transf_matrix     = list(np.reshape(sim.transf_matrix, -1))
 
-            msg.foot_target       = list(np.reshape(sim.foot_target, -1))
+            msg.feet_current_pos       = list(np.reshape(sim.feet_current_pos, -1))
             msg.is_fallen         = sim.is_fallen
 
             # Publish
@@ -369,7 +369,7 @@ if __name__ == '__main__':
         (sim.update_toes_force, 'toes force'),
         (sim.update_joints_sensors, 'joints'),
         (sim.update_transformation_matrices, 'transformation matrices'),
-        (sim.update_foot_target, 'foot target'),
+        (sim.update_feet_current_pos, 'foot target'),
         (sim.update_external_force, 'external force')
     }
 

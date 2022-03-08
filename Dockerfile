@@ -22,3 +22,4 @@ RUN (apt update && \
             tensorflow keras-tcn; \
     done
 
+COPY .env.json ${GIADOG_DIR}/
