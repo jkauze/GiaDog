@@ -77,14 +77,14 @@ def get_leg_to_horizontal_frame_transformations(base_rpy: np.array) -> List[np.a
 
     for i in range(4):
         # We calculate the Hi frame  relative to the leg base position (hip)
-        p_li_hi = np.array([0, H_OFF * (-1)**i, -LEG_SPAN])
+        p_li_Hi = np.array([0, H_OFF * (-1)**i, -LEG_SPAN])
         # We do the same for the leg base orientation
         R_li_Hi = euler_angles_to_rotation_matrix([base_roll, base_pitch, 0])
 
         # Finally we concatenate the rotation matrix and position vector
         # To get the transformation matrix of the Hi horizontal frame expressed
         # in the leg base frame
-        T_li_Hi =  np.concatenate((R_li_Hi,  p_li_hi.reshape(3,1)), axis = 1)
+        T_li_Hi =  np.concatenate((R_li_Hi,  p_li_Hi.reshape(3,1)), axis = 1)
         T_li_Hi = np.concatenate((T_li_Hi, np.array([[0,0,0,1]])), axis = 0)
 
         transformation_matrices.append(T_li_Hi)
