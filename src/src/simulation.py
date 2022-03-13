@@ -69,6 +69,8 @@ class simulation:
         self.giadog_urdf_file = giadog_urdf_file
         self.p = bc.BulletClient(connection_mode=p.GUI if gui else p.DIRECT)
         self.self_collision_enabled = self_collision_enabled
+        self.__reset_state()
+        
 
     def __get_terrain_height(self, x: float, y: float) -> float:
         """
@@ -418,7 +420,9 @@ class simulation:
             Next frame in the simulation.
         """
         self.p.stepSimulation()
+        
         self.timestep += SIM_SECONDS_PER_STEP
+       
 
     def update_position_orientation(self):
         """
