@@ -13,29 +13,41 @@ https://github.com/tensorlayer/RLzoo/blob/master/rlzoo/algorithms/ppo_clip/ppo_c
 """
 import numpy as np
 import tensorflow as tf
+import time
 
 from rlzoo.common.utils import *
 from rlzoo.common.policy_networks import *
 from rlzoo.common.value_networks import *
 
 
-EPS = 1e-8  # epsilon
+EPS = 1e-8  # epsilon (Epsilon parameter to avoid zero division)
 
 
 ###############################  PPO  ####################################
 
 class PPO_CLIP(object):
     """
-    PPO class
+    PPO class. This class implements the PPO clip algorithm.
+    For more information about the PPO algorithm, please refer to the paper:
+    https://arxiv.org/abs/1707.06347
     """
 
     def __init__(self, net_list, optimizers_list, epsilon=0.2):
         """
-        :param net_list: a list of networks (value and policy) used in the 
-                         algorithm, from common functions or customization.
-        :param optimizers_list: a list of optimizers for all networks and 
+        Initialize PPO class
+        
+        Arguments:
+        ---------
+        net_list:  A list of networks (value and policy(actor)) used in the 
+                    algorithm, from common functions or customization.
+        optimizers_list: a list of optimizers for all networks and 
                                 differentiable variables
-        :param epsilon: clip parameter
+        epsilon: clip parameter
+        
+        Returns:
+        -------
+        None
+
         """
         assert len(net_list) == 2
         assert len(optimizers_list) == 2
@@ -45,37 +57,54 @@ class PPO_CLIP(object):
 
         self.critic, self.actor = net_list
 
-        assert isinstance(self.critic, ValueNetwork)
-        assert isinstance(self.actor, StochasticPolicyNetwork)
+        #assert isinstance(self.critic, ValueNetwork)
+        #assert isinstance(self.actor, StochasticPolicyNetwork)
 
         self.critic_opt, self.actor_opt = optimizers_list
 
     def a_train(self, tfs, tfa, tfadv, oldpi_prob):
         """
         Update policy (actor) network
-        :param tfs: state
-        :param tfa: action
-        :param tfadv: advantage
-        :param oldpi_prob: old policy distribution
-        :return: None
+        
+        Arguments:
+        ---------
+
+        tfs: state
+        tfa: action
+        tfadv: advantage
+        oldpi_prob: old policy distribution
+        
+        Returns:
+        -------
+        None
+
         """
         try:
-            tfs = np.array(tfs, np.float32)
-            tfa = np.array(tfa, np.float32)
+            tfs   = np.array(tfs, np.float32)
+            tfa   = np.array(tfa, np.float32)
             tfadv = np.array(tfadv, np.float32)
         except:
             pass
 
         with tf.GradientTape() as tape:
             _ = self.actor(tfs)
+            # We compute the probability of the actions taken by the actor
             pi_prob = tf.exp(self.actor.policy_dist.logp(tfa))
+
+            # Calculate the ratio between the old and the new policy
             ratio = pi_prob / (oldpi_prob + EPS)
 
+            # Calculate the surrogate loss. pi_new/pi_old * advantage
             surr = ratio * tfadv
+            
+            # Apply the clipped surrogate function (check the PPO clip update) 
             aloss = -tf.reduce_mean(
                 tf.minimum(surr, tf.clip_by_value(ratio, 1. - self.epsilon, 1.+\
                             self.epsilon) * tfadv))
+        # Compute the gradient of the loss with respect to the policy network
         a_gard = tape.gradient(aloss, self.actor.trainable_weights)
+        # Apply the gradient to the policy network
+        # (See that the apply gradient is used with the optimizer)
         self.actor_opt.apply_gradients(zip(a_gard, self.actor.trainable_weights))
 
     def c_train(self, tfdc_r, s):
@@ -86,23 +115,41 @@ class PPO_CLIP(object):
         ---------
         :param tfdc_r: cumulative reward
         :param s: state
-        :return: None
+        
+        Returns:
+        -------
+        None
         """
         tfdc_r = np.array(tfdc_r, dtype=np.float32)
         
         with tf.GradientTape() as tape:
+            # Compute the value of the state s
             v = self.critic(s)
+            # Calculate the advantage of the state s. cumulative_rewards - value
             advantage = tfdc_r - v
+            # Calculate the loss of the critic network.
+            # The loss function is the mean squared error between of the 
+            # advantage
             closs = tf.reduce_mean(tf.square(advantage))
+        # Compute the gradient of the loss with respect to the critic network
         grad = tape.gradient(closs, self.critic.trainable_weights)
+        # Apply the gradient to the critic network
+        # (See that the apply gradient is used with the optimizer)
         self.critic_opt.apply_gradients(zip(grad, self.critic.trainable_weights))
 
     def cal_adv(self, tfs, tfdc_r):
         """
-        Calculate advantage
+        Calculates advantage
+        
+        Arguments:
+        ---------
         :param tfs: state
         :param tfdc_r: cumulative reward
-        :return: advantage
+
+        Returns:
+        -------
+        advantage: advantage value
+        
         """
         tfdc_r = np.array(tfdc_r, dtype=np.float32)
         advantage = tfdc_r - self.critic(tfs)
@@ -110,11 +157,17 @@ class PPO_CLIP(object):
 
     def update(self, s, a, r, a_update_steps, c_update_steps):
         """
-        Update parameter with the constraint of KL divergent
+        Update parameter with the constraint of KL divergent/
+
+        Arguments:
+        ---------
         :param s: state
         :param a: act
         :param r: reward
-        :return: None
+        
+        Returns:
+        -------
+        None
         """
         adv = self.cal_adv(s, r)
         # adv = (adv - adv.mean())/(adv.std()+1e-6)  # adv norm, sometimes helpful
@@ -133,25 +186,43 @@ class PPO_CLIP(object):
 
     def get_action(self, s):
         """
-        Choose action
-        :param s: state
-        :return: clipped act
+        Compute the agent action given an state s.
+
+        Arguments:
+        ---------
+        s: state
+
+        Returns:
+        -------
+        clipped action
         """
         return self.actor([s])[0].numpy()
 
     def get_action_greedy(self, s):
         """
-        Choose action
-        :param s: state
-        :return: clipped act
+        Compute the agent action given an state s, based on a greedy policy.
+
+        Arguments:
+        ---------
+        s: state
+
+        Returns:
+        -------
+        clipped action
         """
         return self.actor([s], greedy=True)[0].numpy()
 
-    def get_v(self, s):
+    def get_value(self, s):
         """
-        Compute value
-        :param s: state
-        :return: value
+        Compute the value of a given state (Using the critic network).
+
+        Arguments:
+        ---------
+        s: state
+
+        Returns:
+        -------
+        value
         """
         try:
             s = s.astype(np.float32)
@@ -161,22 +232,23 @@ class PPO_CLIP(object):
         res = self.critic(s)[0, 0]
         return res
 
+    """
     def save_ckpt(self, env_name):
-        """
-        save trained weights
-        :return: None
-        """
-        save_model(self.actor, 'actor', self.name, env_name)
-        save_model(self.critic, 'critic', self.name, env_name)
+    """
+    """save trained weights
+    :return: None"""
+    """
+    save_model(self.actor, 'actor', self.name, env_name)
+    save_model(self.critic, 'critic', self.name, env_name)
 
     def load_ckpt(self, env_name):
-        """
-        load trained weights
-        :return: None
-        """
-        load_model(self.actor, 'actor', self.name, env_name)
-        load_model(self.critic, 'critic', self.name, env_name)
-
+    """
+    """load trained weights
+    :return: None"""
+    """
+    load_model(self.actor, 'actor', self.name, env_name)
+    load_model(self.critic, 'critic', self.name, env_name)
+    """
     def learn(self, env, train_episodes=200, test_episodes=100, max_steps=200, save_interval=10,
               gamma=0.9, mode='train', render=False, batch_size=32, a_update_steps=10, c_update_steps=10,
               plot_func=None):
