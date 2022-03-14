@@ -13,6 +13,7 @@ https://github.com/tensorlayer/RLzoo/blob/master/rlzoo/algorithms/ppo_clip/ppo_c
 """
 import numpy as np
 import tensorflow as tf
+
 import time
 
 #from rlzoo.common.utils import *
@@ -21,6 +22,7 @@ import time
 
 
 EPS = 1e-8  # epsilon (Epsilon parameter to avoid zero division)
+
 
 
 ###############################  PPO  ####################################
@@ -34,6 +36,7 @@ class PPO_CLIP(object):
 
     def __init__(self, net_list, optimizers_list, epsilon=0.2):
         """
+
         Initialize PPO class
         
         Arguments:
@@ -48,6 +51,7 @@ class PPO_CLIP(object):
         -------
         None
 
+
         """
         assert len(net_list) == 2
         assert len(optimizers_list) == 2
@@ -59,6 +63,7 @@ class PPO_CLIP(object):
 
         #assert isinstance(self.critic, ValueNetwork)
         #assert isinstance(self.actor, StochasticPolicyNetwork)
+
 
         self.critic_opt, self.actor_opt = optimizers_list
 
@@ -88,6 +93,7 @@ class PPO_CLIP(object):
 
         with tf.GradientTape() as tape:
             _ = self.actor(tfs)
+
             # We compute the probability of the actions taken by the actor
             pi_prob = tf.exp(self.actor.policy_dist.logp(tfa))
             print(pi_prob)
@@ -117,14 +123,17 @@ class PPO_CLIP(object):
         ---------
         :param tfdc_r: cumulative reward
         :param s: state
+
         
         Returns:
         -------
         None
+
         """
         tfdc_r = np.array(tfdc_r, dtype=np.float32)
         
         with tf.GradientTape() as tape:
+
             # Compute the value of the state s
             v = self.critic(s)
             # Calculate the advantage of the state s. cumulative_rewards - value
@@ -159,6 +168,7 @@ class PPO_CLIP(object):
 
     def update(self, s, a, r, a_update_steps, c_update_steps):
         """
+
         Update parameter with the constraint of KL divergent/
 
         Arguments:
@@ -188,6 +198,7 @@ class PPO_CLIP(object):
 
     def get_action(self, s):
         """
+
         Compute the agent action given an state s.
 
         Arguments:
@@ -226,6 +237,7 @@ class PPO_CLIP(object):
         Returns:
         -------
         value
+
         """
         try:
             s = s.astype(np.float32)
@@ -252,6 +264,7 @@ class PPO_CLIP(object):
     load_model(self.actor, 'actor', self.name, env_name)
     load_model(self.critic, 'critic', self.name, env_name)
     """
+
     def learn(self, env, train_episodes=200, test_episodes=100, max_steps=200, save_interval=10,
               gamma=0.9, mode='train', render=False, batch_size=32, a_update_steps=10, c_update_steps=10,
               plot_func=None):
