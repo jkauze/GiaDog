@@ -155,7 +155,7 @@ class teacher_giadog_env(gym.Env):
             'thighs_contact': spaces.MultiBinary(4),
             'shanks_contact': spaces.MultiBinary(4),
 
-            # Priviliged Space 
+            # Privileged Space 
             'normal_foot': spaces.Box(
                 low = -np.inf * np.ones((4, 3)), 
                 high = np.inf * np.ones((4, 3)),
@@ -176,12 +176,57 @@ class teacher_giadog_env(gym.Env):
                 high = np.inf * np.ones((4,)),
                 dtype = np.float32
             ),
-            'foot_friction': spaces.Box(
+            'external_force': spaces.Box(
                 low = -np.inf * np.ones((3,)), 
                 high = np.inf * np.ones((3,)),
                 dtype = np.float32
             )
         })
+        # We calculate the space dimentions for the observation space.
+        # This is done manually because the gym.spaces.Dict space does not 
+        # support the calculation of the dimentions by itself.
+
+        # First for the non priviliged data
+        self.non_privileged_space_keys = [  'target_dir', 'turn_dir', 
+                                            'gravity_vector', 'angular_vel', 
+                                            'linear_vel', 'joint_angles', 
+                                            'joint_vels', 'ftg_phases', 
+                                            'ftg_freqs', 'base_freq', 
+                                            'joint_err_hist', 'joint_vel_hist', 
+                                            'feet_target_hist', 'toes_contact', 
+                                            'thighs_contact', 'shanks_contact']
+
+        non_priviledge_dim = 0
+        for key in self.non_privileged_space_keys:
+            elem = self.observation_space[key].shape
+            if len(elem) == 0:
+                non_priviledge_dim += 1
+            else:
+                dims = [elem[i] for i in range(len(elem))]
+                non_priviledge_dim += np.prod(dims)
+        self.non_privileged_space_shape = (non_priviledge_dim,)
+
+
+        # Then for the priviliged data
+        self.privileged_space_keys = ['normal_foot', 'height_scan', 
+                                        'foot_forces', 'foot_friction', 
+                                        'external_force']
+
+        priviledge_dim = 0
+        for key in self.privileged_space_keys:
+            elem = self.observation_space[key].shape
+            if len(elem) == 0:
+                priviledge_dim += 1
+            else:
+                dims = [elem[i] for i in range(len(elem))]
+                priviledge_dim += np.prod(dims)
+        
+        self.privileged_space_shape = (priviledge_dim,)
+
+        # We also set the total observation space shape
+        self.observation_space_shape = (non_priviledge_dim + priviledge_dim,)
+
+        # We set the action space
         self.action_space = spaces.Box(
             low = -float('inf') * np.ones((16,)),
             high = float('inf') * np.ones((16,)),
@@ -240,7 +285,7 @@ class teacher_giadog_env(gym.Env):
             ts.registerCallback(self.__update_obs_ros)
         else:
             self.count = 0
-            self.reset(TERRAIN_FILE)
+            self.reset(TERRAIN_FILE) # This may be deleted later
             self.begin_time = time()
             self.__update_obs_sim()
 

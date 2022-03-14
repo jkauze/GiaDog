@@ -18,6 +18,9 @@ if __name__ == '__main__':
     
     env = teacher_giadog_env(sim = sim)
     print("# # # Env Initialized # # #")
+    print("priviliged_data_shape: ", env.privileged_space_shape)
+    print("non_priviliged_data_shape: ", env.non_privileged_space_shape)
+    print("# # # # # # # # # # # # #")
     ac_space = env.action_space
     obs_space = env.observation_space
     policy = teacher_network(action_space = ac_space,
@@ -45,7 +48,7 @@ if __name__ == '__main__':
     print("# # # Agent advantage calculation testing # # #")
     advantage = ppo_agent.cal_adv([p_info, np_info], 1.12)
     print("# # # Agent policy train testing # # #")
-    cal_loss = ppo_agent.update([p_info, np_info], action, 0.25, 1, 1)
+    cal_loss = ppo_agent.update([p_info, np_info], action, 0.25, 5, 5)
 
     print("# # # Test completed # # #")
     
