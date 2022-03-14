@@ -1,9 +1,3 @@
-"""
-    Authors: Amin Arriaga, Eduardo Lopez
-    Project: Graduation Thesis: GIAdog
-
-    [TODO]
-"""
 # Utilities
 import json
 from typing import *
@@ -12,64 +6,52 @@ from abc import abstractmethod
 # Machine Learning
 import numpy as np
 from tcn import TCN
-from tensorflow import keras
+from tensorflow import keras, clip_by_value, Variable
 from tensorflow.keras import layers
+from src.distributions import make_dist
 
 
-# Cargamos las variables de entorno
-with open('.env.json', 'r') as f:
-    ENV = json.load(f)
-# Obtenemos las constantes necesarias
-HISTORY_LEN  = ENV["NEURAL_NETWORK"]["HISTORY_LEN"]
-NON_PRIVILIGED_DATA = [
-    'target_dir',
-    'turn_dir',
-    'gravity_vector',
-    'angular_vel',
-    'linear_vel',
-    'joint_angles',
-    'joint_vels',
-    'ftg_phases',
-    'ftg_freqs',
-    'base_freq',
-    'joint_err_hist',
-    'joint_vel_hist',
-    'foot_target_hist',
-    'toes_contact',
-    'thighs_contact',
-    'shanks_contact'
-]
-PRIVILIGED_DATA = [
-    'normal_foot',
-    'height_scan',
-    'foot_forces',
-    'foot_friction',
-    'external_force'
-]
+from gym import spaces
 
-class controller_neural_network:
+
+class VariableLayer(layers.Layer):
+    def __init__(self, units,*args, **kwargs):
+        super(VariableLayer, self).__init__(*args, **kwargs)
+        self.units = units
+    
+    def build(self, input_shape):
+        self.bias = self.add_weight('bias',
+                                    shape=self.units,
+                                    initializer='zeros',
+                                    trainable=True)
+    def call(self, x):
+        return self.bias
+
+
+class teacher_network(object):
     """
-        [TODO]
+        Teacher policy network class.
+
     """
-    NORMAL_DATA_SHAPE         = 60
-    NON_PRIVILIGED_DATA_SHAPE = 145
-    PRIVILIGED_DATA_SHAPE     = 59
-    CLASSIFIER_INPUT_SHAPE    = 64 + NON_PRIVILIGED_DATA_SHAPE
+    def __init__(self, 
+                action_space:Optional[spaces.Box]=None,
+                observation_space:Optional[spaces.Box]=None):
+        """
+        Initializes the teacher network.
 
-    @abstractmethod
-    def __init__(self): pass 
+        Arguments:
+        ----------
+        action_space: gym.spaces.Box -- The action space of the environment.
 
-    @abstractmethod
-    def train(self): pass 
+        Returns:
+        --------
+        None
+        """
+        self.PRIVILIGED_DATA_SHAPE = 59
+        self.NON_PRIVILIGED_DATA_SHAPE = 145
+        self.CLASSIFIER_INPUT_SHAPE = 64 + self.NON_PRIVILIGED_DATA_SHAPE
 
-    @abstractmethod
-    def predict(self): pass
-
-class teacher_nn(controller_neural_network):
-    """
-        [TODO]
-    """
-    def __init__(self):
+    
         # Subnetwork that processes the privileged data
         inputs_x_t = keras.Input(
             shape=self.PRIVILIGED_DATA_SHAPE, 
@@ -79,7 +61,8 @@ class teacher_nn(controller_neural_network):
         x_t = layers.Dense(64, activation='tanh')(x_t)
         self.encoder = keras.Model(inputs_x_t, x_t, name='encoder')
 
-        # Concatenate the output of the previous network with the non-privileged data
+        # Concatenate the output of the previous network with the non-privileged 
+        # data
         inputs_o_t = keras.Input(
             shape=self.NON_PRIVILIGED_DATA_SHAPE,
             name='non_priviliged_data')
@@ -94,24 +77,61 @@ class teacher_nn(controller_neural_network):
         self.classifier = keras.Model(inputs_c, outputs_c, name='classifier')
 
         # Entire network
-        outputs = self.classifier(concat)
-        self.model = keras.Model([inputs_x_t, inputs_o_t], outputs)
+        mean = self.classifier(concat)
+
+       
+
+        # Other variables
+        # Get the policy distribution
+        self.policy_dist = make_dist(action_space)
+
+        log_std = VariableLayer(self.policy_dist._ndim)([inputs_x_t, 
+                                                        inputs_o_t])
+        
+        # Log std (for the Gaussian distribution) 
+        
+        self.model = keras.Model(inputs = [inputs_x_t, inputs_o_t], 
+                                outputs = [mean, log_std])
+
+        # Get the action space and the observation space
+        self.action_space = action_space
+        self.observation_space = observation_space
+
+        
 
     def predict(self, input_x_t, input_o_t) -> np.array:
         return self.model([input_x_t, input_o_t])
-
-    def predict_obs(self, obs: Dict[str, np.array]) -> np.array:
-        input_x_t = np.concatenate([
-            np.reshape(obs[attr], -1) for attr in PRIVILIGED_DATA
-        ])
-        input_o_t = np.concatenate([
-            np.reshape(obs[attr], -1) for attr in NON_PRIVILIGED_DATA
-        ])
-        return self.predict(
-            np.array([input_x_t], dtype=np.float32), 
-            np.array([input_o_t], dtype=np.float32)
-        )
     
+    def __call__(self, input, greedy = False):
+
+        input_x_t, input_o_t = input
+        
+        mean, log_std = self.model([input_x_t, input_o_t])
+
+        self.policy_dist.set_param([mean, log_std])
+        
+        if greedy:
+            result = self.policy_dist.greedy_sample()
+        else:
+            result = self.policy_dist.sample()
+        
+        
+        """
+        # Actions are normalized
+        if greedy:
+            result = result * self._action_scale + self._action_mean
+        else:
+            result, explore = result
+            result = result * self._action_scale + self._action_mean + explore
+        """
+
+        result = clip_by_value(result, self.action_space.low, 
+                                        self.action_space.high)
+
+        return result
+
+    def trainable_weights(self):
+        return self.model.trainable_weights
     def save_model_weights(self, path: str, epoch: int):
         """
             Saves the teacher model weights to a file and also saves separetly 
@@ -175,47 +195,5 @@ class teacher_nn(controller_neural_network):
                          The file must be a .ckpt file.
         """
         self.model.load_weights(path)
-
-
-class student_nn(controller_neural_network):
-    """
-        [TODO]
-
-        References:
-        -----------
-            * @misc{KerasTCN,
-                author = {Philippe Remy},
-                title = {Temporal Convolutional Networks for Keras},
-                year = {2020},
-                publisher = {GitHub},
-                journal = {GitHub repository},
-                howpublished = {\ url{https://github.com/philipperemy/keras-tcn}},
-            }
-    """
-    def __init__(self, teacher: teacher_nn):
-        # TCN network
-        inputs_h_t = keras.Input(shape=(HISTORY_LEN, self.NORMAL_DATA_SHAPE))
-        h_t = TCN(
-            nb_filters=self.NORMAL_DATA_SHAPE // 2,
-            kernel_size=5,
-            dilations=(1,2,4,8,16),
-            activation='relu',
-            return_sequences=False
-        )(inputs_h_t)
-        h_t = layers.Dense(64, activation='tanh')(h_t)
-        self.encoder = keras.Model(inputs_h_t, h_t)
-
-        # Concatenate the output of the previous network with the non-privileged data
-        inputs_o_t = keras.Input(shape=self.NON_PRIVILIGED_DATA_SHAPE)
-        concat = layers.Concatenate()([inputs_o_t, h_t])
-
-        # Classifier subnetwork inherited from teacher
-        self.classifier = teacher.classifier
-
-        # Entire network
-        outputs = self.classifier(concat)
-        self.model = keras.Model([inputs_h_t, inputs_o_t], outputs)
     
-    def predict(self, input_h_t, input_o_t) -> np.array:
-        return self.model([input_h_t, input_o_t])
 
