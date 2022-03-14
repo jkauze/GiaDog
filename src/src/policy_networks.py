@@ -14,6 +14,20 @@ from src.distributions import make_dist
 from gym import spaces
 
 
+class VariableLayer(layers.Layer):
+    def __init__(self, units,*args, **kwargs):
+        super(VariableLayer, self).__init__(*args, **kwargs)
+        self.units = units
+    
+    def build(self, input_shape):
+        self.bias = self.add_weight('bias',
+                                    shape=self.units,
+                                    initializer='zeros',
+                                    trainable=True)
+    def call(self, x):
+        return self.bias
+
+
 class teacher_network(object):
     """
         Teacher policy network class.
@@ -71,13 +85,13 @@ class teacher_network(object):
         # Get the policy distribution
         self.policy_dist = make_dist(action_space)
 
-        self.log_std = Variable(np.zeros(self.policy_dist.ndim, 
-                                                dtype=np.float32))
+        log_std = VariableLayer(self.policy_dist._ndim)([inputs_x_t, 
+                                                        inputs_o_t])
         
         # Log std (for the Gaussian distribution) 
         
         self.model = keras.Model(inputs = [inputs_x_t, inputs_o_t], 
-                                outputs = mean)
+                                outputs = [mean, log_std])
 
         # Get the action space and the observation space
         self.action_space = action_space
@@ -92,9 +106,9 @@ class teacher_network(object):
 
         input_x_t, input_o_t = input
         
-        mean = self.model([input_x_t, input_o_t])
+        mean, log_std = self.model([input_x_t, input_o_t])
 
-        self.policy_dist.set_param([mean, self.log_std])
+        self.policy_dist.set_param([mean, log_std])
         
         if greedy:
             result = self.policy_dist.greedy_sample()
@@ -116,7 +130,8 @@ class teacher_network(object):
 
         return result
 
-    
+    def trainable_weights(self):
+        return self.model.trainable_weights
     def save_model_weights(self, path: str, epoch: int):
         """
             Saves the teacher model weights to a file and also saves separetly 

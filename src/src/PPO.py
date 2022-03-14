@@ -15,9 +15,9 @@ import numpy as np
 import tensorflow as tf
 import time
 
-from rlzoo.common.utils import *
-from rlzoo.common.policy_networks import *
-from rlzoo.common.value_networks import *
+#from rlzoo.common.utils import *
+#from rlzoo.common.policy_networks import *
+#from rlzoo.common.value_networks import *
 
 
 EPS = 1e-8  # epsilon (Epsilon parameter to avoid zero division)
@@ -90,7 +90,7 @@ class PPO_CLIP(object):
             _ = self.actor(tfs)
             # We compute the probability of the actions taken by the actor
             pi_prob = tf.exp(self.actor.policy_dist.logp(tfa))
-
+            print(pi_prob)
             # Calculate the ratio between the old and the new policy
             ratio = pi_prob / (oldpi_prob + EPS)
 
@@ -102,10 +102,12 @@ class PPO_CLIP(object):
                 tf.minimum(surr, tf.clip_by_value(ratio, 1. - self.epsilon, 1.+\
                             self.epsilon) * tfadv))
         # Compute the gradient of the loss with respect to the policy network
-        a_gard = tape.gradient(aloss, self.actor.trainable_weights)
+        a_gard = tape.gradient(aloss, self.actor.model.trainable_weights)
+        #a_grad_sigma = tape.gradient(aloss, self.actor.log_std)
         # Apply the gradient to the policy network
         # (See that the apply gradient is used with the optimizer)
-        self.actor_opt.apply_gradients(zip(a_gard, self.actor.trainable_weights))
+        self.actor_opt.apply_gradients(zip(a_gard, self.actor.model.trainable_weights))
+        #self.actor_opt.apply_gradients(zip(a_grad_sigma, self.actor.log_std))
 
     def c_train(self, tfdc_r, s):
         """
@@ -132,10 +134,10 @@ class PPO_CLIP(object):
             # advantage
             closs = tf.reduce_mean(tf.square(advantage))
         # Compute the gradient of the loss with respect to the critic network
-        grad = tape.gradient(closs, self.critic.trainable_weights)
+        grad = tape.gradient(closs, self.critic.model.trainable_weights)
         # Apply the gradient to the critic network
         # (See that the apply gradient is used with the optimizer)
-        self.critic_opt.apply_gradients(zip(grad, self.critic.trainable_weights))
+        self.critic_opt.apply_gradients(zip(grad, self.critic.model.trainable_weights))
 
     def cal_adv(self, tfs, tfdc_r):
         """
@@ -196,7 +198,8 @@ class PPO_CLIP(object):
         -------
         clipped action
         """
-        return self.actor([s])[0].numpy()
+
+        return self.actor(s)[0].numpy()
 
     def get_action_greedy(self, s):
         """
@@ -210,7 +213,7 @@ class PPO_CLIP(object):
         -------
         clipped action
         """
-        return self.actor([s], greedy=True)[0].numpy()
+        return self.actor(s, greedy=True)[0].numpy()
 
     def get_value(self, s):
         """

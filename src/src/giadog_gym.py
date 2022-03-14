@@ -240,6 +240,7 @@ class teacher_giadog_env(gym.Env):
             ts.registerCallback(self.__update_obs_ros)
         else:
             self.count = 0
+            self.reset(TERRAIN_FILE)
             self.begin_time = time()
             self.__update_obs_sim()
 
