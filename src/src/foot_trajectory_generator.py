@@ -50,8 +50,8 @@ def FTG(sigma_i_0: float, t: float, f_i: float) -> Tuple[np.array, float] :
         Returns:
         -------
             numpy.ndarray, shape (3,) 
-                Vector expresed in the i-th leg horizontal frame Hi, representing the 
-                target foot position.
+                Vector expresed in the i-th leg horizontal frame Hi,
+                representing the target foot position.
 
             float
                 FTG frequency. This output is used as an input of the neural network
