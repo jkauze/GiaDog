@@ -96,7 +96,6 @@ class PPO_CLIP(object):
 
             # We compute the probability of the actions taken by the actor
             pi_prob = tf.exp(self.actor.policy_dist.logp(tfa))
-            print(pi_prob)
             # Calculate the ratio between the old and the new policy
             ratio = pi_prob / (oldpi_prob + EPS)
 
