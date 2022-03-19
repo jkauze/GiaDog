@@ -6,8 +6,14 @@ from tensorflow.keras import layers
 
 
 class teacher_value_network(object):
+    """
+    Teacher value network class.
+    """
     
     def __init__(self):
+        """
+        Initializes the teacher value network.
+        """
     
         self.PRIVILIGED_DATA_SHAPE = 59
         self.NON_PRIVILIGED_DATA_SHAPE = 145
@@ -34,9 +40,13 @@ class teacher_value_network(object):
                                  name='value network')
     
     def __call__(self, state):
+        """
+        Computes the value of the state.
+
+        Arguments:
+        ----------
+        state: np.array -- The state of the environment.
+        """
         
         return self.model(state)
     
-    def trainable_weights(self):
-        
-        return self.model.trainable_weights
