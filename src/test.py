@@ -4,6 +4,7 @@ from src.giadog_gym import teacher_giadog_env
 from src.policy_networks import teacher_network
 from src.value_networks import teacher_value_network
 from src.PPO import PPO_CLIP
+from src.TRPO import TRPO
 import pybullet as p
 import numpy as np
 from tensorflow.keras.optimizers import Adam
@@ -32,10 +33,12 @@ if __name__ == '__main__':
     print("# # # Optimizers Initialized # # #")
     net_list = [value_function, policy]
     optimizers_list = [value_function_optimizer ,policy_optimizer ]
+
+    print("### Testing PPO_CLIP Agent ####")
     ppo_agent = PPO_CLIP(net_list, optimizers_list)
     print("# # # Agent Initialized # # #")
-    p_info = np.zeros((1,59))
-    np_info = np.zeros((1,145))
+    p_info = np.random.randn(5, 59)
+    np_info = np.random.randn(5, 145)
     print("# # # Agent policy testing # # #")
     action = ppo_agent.get_action([p_info, np_info]) 
     print(action)
@@ -46,9 +49,32 @@ if __name__ == '__main__':
     result = ppo_agent.get_value([p_info, np_info]) 
     print(result)
     print("# # # Agent advantage calculation testing # # #")
-    advantage = ppo_agent.cal_adv([p_info, np_info], 1.12)
+    advantage = ppo_agent.cal_adv([[p_info, np_info]], np.random.randn(5, 1))
+    #print(advantage)
     print("# # # Agent policy train testing # # #")
-    cal_loss = ppo_agent.update([p_info, np_info], action, 0.25, 5, 5)
-
+    cal_loss = ppo_agent.update([p_info, np_info], np.random.randn(5, 16), np.random.randn(5, 1), 5, 5)
+    print("# # # Test completed # # #")
+    
+    print("### Testing TRPO Agent ####")
+    net_list = [value_function, policy]
+    optimizers_list = [value_function_optimizer]# ,policy_optimizer ]
+    trpo_agent = TRPO(net_list, optimizers_list)
+    print("# # # Agent Initialized # # #")
+    p_info = np.random.randn(5, 59)
+    np_info = np.random.randn(5, 145)
+    print("# # # Agent policy testing # # #")
+    action = trpo_agent.get_action([p_info, np_info]) 
+    print(action)
+    print("# # # Agent greedy policy testing # # #")
+    result = trpo_agent.get_action_greedy([p_info, np_info]) 
+    print(result)
+    print("# # # Agent value function  testing # # #")
+    result = trpo_agent.get_value([p_info, np_info]) 
+    print(result)
+    print("# # # Agent advantage calculation testing # # #")
+    advantage = trpo_agent.cal_adv([[p_info, np_info]], np.random.randn(5, 1))
+    #print(advantage)
+    print("# # # Agent policy train testing # # #")
+    cal_loss = trpo_agent.update([p_info, np_info], np.random.randn(5, 16), np.random.randn(5, 1), 5, 5, 0.24)
     print("# # # Test completed # # #")
     
