@@ -15,16 +15,56 @@ from gym import spaces
 
 
 class VariableLayer(layers.Layer):
+    """
+    Variable Layer class
+
+    It is an auxiliary layer that it is used to create a varible layer.
+
+    Its main purpose in this project is to create a layer that outputs the 
+    log of the standard deviation of each of the actions. Thi is used to 
+    implement a diagonal gaussian policy.
+
+
+    For more info about gaussian policy, please refer to:
+    https://spinningup.openai.com/en/latest/spinningup/rl_intro.html
+    (Look for the appendix on Diagonal Gaussian Policies)
+
+    """
     def __init__(self, units,*args, **kwargs):
+        """
+        Initialization of the layer
+
+        Arguments:
+        ----------
+        units (int): number of units of the layer. (Output size)
+        """
         super(VariableLayer, self).__init__(*args, **kwargs)
         self.units = units
     
     def build(self, input_shape):
+        """
+        Build method of the layer.
+
+        Arguments:
+        ----------
+        input_shape (tuple): shape of the input tensor. (It is not really used)
+        """
         self.bias = self.add_weight('bias',
                                     shape=self.units,
                                     initializer='zeros',
                                     trainable=True)
     def call(self, x):
+        """
+        Call method of the layer.
+
+        Arguments:
+        ----------
+        x (tensor): input tensor. (Ignored)
+
+        Returns:
+        --------
+        tensor: output tensor.
+        """
         return self.bias
 
 
@@ -97,16 +137,29 @@ class teacher_network(object):
         self.action_space = action_space
         self.observation_space = observation_space
 
-        
-
-    def predict(self, input_x_t, input_o_t) -> np.array:
-        return self.model([input_x_t, input_o_t])
     
     def __call__(self, input, greedy = False):
+        """
+            Returns the action and the log probability of the action.
 
-        input_x_t, input_o_t = input
+            Arguments:
+            ----------
+            input: np.array -- The input to the teacher network.
+                                
+            greedy: bool -- If True, the greedy policy is used.
+
+            Note: The input should be in the form [inputs_x_t, inputs_o_t]
+            Where inputs_x_t is the input to the privileged data subnetwork
+            and inputs_o_t is the input to the non-privileged data subnetwork.
+
+            Returns:
+            --------
+            action: np.array -- The action to be taken.
+        """
+
+        #input_x_t, input_o_t = input
         
-        mean, log_std = self.model([input_x_t, input_o_t])
+        mean, log_std = self.model(input)
 
         self.policy_dist.set_param([mean, log_std])
         
@@ -130,8 +183,6 @@ class teacher_network(object):
 
         return result
 
-    def trainable_weights(self):
-        return self.model.trainable_weights
     def save_model_weights(self, path: str, epoch: int):
         """
             Saves the teacher model weights to a file and also saves separetly 
