@@ -34,7 +34,7 @@ NON_PRIVILIGED_DATA = [
     'base_freq',
     'joint_err_hist',
     'joint_vel_hist',
-    'foot_target_hist',
+    'feet_target_hist',
     'toes_contact',
     'thighs_contact',
     'shanks_contact'
@@ -64,6 +64,28 @@ class controller_neural_network:
 
     @abstractmethod
     def predict(self): pass
+
+    def save(self, path: str):
+        """
+            Saves the model weights to a directory
+
+            Arguments:
+            ----------
+                path: str 
+                    Path where the model will be saved.
+        """
+        self.model.save_weights(path)
+
+    def load(self, path: str):
+        """
+            Loads the model weights from a directory.
+
+            Arguments:
+            ----------
+                path: str 
+                    Path to the file where the weights will be loaded.
+        """
+        self.model.load_weights(path)
 
 class teacher_nn(controller_neural_network):
     """
@@ -111,70 +133,6 @@ class teacher_nn(controller_neural_network):
             np.array([input_x_t], dtype=np.float32), 
             np.array([input_o_t], dtype=np.float32)
         )
-    
-    def save_model_weights(self, path: str, epoch: int):
-        """
-            Saves the teacher model weights to a file and also saves separetly 
-            the classifier model weights.The format of the files are: .ckpt
-
-            Arguments:
-            ----------
-            path: str -- Path to the file where the model will be saved.
-            epoch: int -- Epoch number (Is to indicate the creation of).
-
-            Returns:
-            --------
-            None
-        """
-        self.model.save_weights(path + '_epoch_' + str(epoch) + '.ckpt')
-        self.classifier.save_weights(path + '_classifier_epoch_' + str(epoch)\
-         + '.ckpt')
-    
-    def save_model(self, path: str, epoch: int):
-        """
-            Saves the full teacher model to a file and also saves separetly the
-            classifier model. The format of the files are: .h5
-
-            Arguments:
-            ----------
-            path: str -- Path to the file where the model will be saved.
-            epoch: int -- Epoch number (Is to indicate the creation of).
-
-            Returns:
-            --------
-            None
-        """
-        self.model.save(path + '_epoch_' + str(epoch) + '.ckpt')
-        self.classifier.save(path + '_classifier_epoch_' + str(epoch) + '.ckpt')
-    
-    def load_model(self, path:str):
-        """
-            Loads the model from a .h5 file.
-
-            Note: The model that it is going to be loaded should be the same as
-                    the teacher model. 
-
-            Arguments:
-            ----------
-            path: str -- Path to the file where the model will be loaded.
-                         The file must be a .h5 file.
-        """
-
-        self.model = keras.models.load_model(path)
-    
-    def load_weights(self, path:str):
-        """
-            Loads the weights from a .ckpt file.
-
-            Note: The weights must be saved with the save_model_weights method.
-                  And are the teacher model weights, (not the classifier 
-                  weights).
-            Arguments:
-            ----------
-            path: str -- Path to the file where the weights will be loaded.
-                         The file must be a .ckpt file.
-        """
-        self.model.load_weights(path)
 
 
 class student_nn(controller_neural_network):
