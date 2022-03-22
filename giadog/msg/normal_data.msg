@@ -16,7 +16,7 @@ float32[] joint_angles
 float32[] joint_velocities
 
 # Transformation matrices
-float32[] transf_matrix
+float32[] transf_matrices
 
 float32[] feet_current_pos
 bool is_fallen

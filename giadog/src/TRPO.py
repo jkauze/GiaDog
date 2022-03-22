@@ -5,7 +5,7 @@ import tensorflow as tf
 
 import time
 import copy
-from src.distributions import make_dist
+from src.agents.Distribution import *
 
 EPS = 1e-8  # epsilon
 
@@ -44,7 +44,11 @@ class TRPO:
 
         # Optimizer for value function
         self.critic_opt, = optimizers_list
-        self.old_dist = make_dist(self.actor.action_space)
+        self.old_dist = DiagGaussian(
+            self.actor.action_space.shape[0],
+            np.zeros(16,),
+            np.ones((16,))
+        )
 
     @staticmethod
     def flat_concat(xs):
@@ -218,7 +222,7 @@ class TRPO:
 
         surr = ratio * badv
         aloss = -tf.reduce_mean(surr)
-        kl = self.old_dist.kl(self.actor.policy_dist.param)
+        kl = self.old_dist.kl(*self.actor.policy_dist.get_param())
         # kl = tfp.distributions.kl_divergence(oldpi, pi)
         kl = tf.reduce_mean(kl)
         return aloss, kl
@@ -286,7 +290,7 @@ class TRPO:
         oldpi_prob = tf.stop_gradient(oldpi_prob)
 
         oldpi_param = self.actor.policy_dist.get_param()
-        self.old_dist.set_param(oldpi_param)
+        self.old_dist.set_param(*oldpi_param)
 
         self.a_train(bs, ba, adv, oldpi_prob, backtrack_iters, backtrack_coeff)
 

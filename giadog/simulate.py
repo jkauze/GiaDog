@@ -19,8 +19,8 @@ from threading import Thread
 # Simulation
 import rospy
 import pybullet as p
-from src.simulation import simulation
-from src.terrain_gen import terrain_gen
+from giadog.src.simulation import Simulation
+from giadog.src.simulation.terrain_gen import terrain_gen
 from spot_mini_ros.msg import joint_angles, normal_data, priviliged_data, text, timestep
 
 
@@ -36,7 +36,7 @@ X_INIT                = ENV["SIMULATION"]["X_INIT"]
 Y_INIT                = ENV["SIMULATION"]["Y_INIT"]
 QUEUE_SIZE            = ENV["ROS"]["QUEUE_SIZE"]
 
-def run_simulation(sim: simulation):
+def run_simulation(sim: Simulation):
     """ Run the simulation. """
     print('\n\033[1;36m[i]\033[0m Simulation is runing!')
     rate = rospy.Rate(STEPS_PER_REAL_SECOND) 
@@ -82,7 +82,7 @@ def update_sensors(data_name: str, update_function: Callable):
 
         rate.sleep()
 
-def normal_data_publisher(sim: simulation):
+def normal_data_publisher(sim: Simulation):
     """
         Function in charge of publishing through a ROS topic the normal data from
         simulation.
@@ -127,7 +127,7 @@ def normal_data_publisher(sim: simulation):
     except rospy.ROSInterruptException:
         print('\033[1;93m[w]\033[0m Topic "normal_data" was stopped.')
 
-def priviliged_data_publisher(sim: simulation):
+def priviliged_data_publisher(sim: Simulation):
     """
         Function in charge of publishing through a ROS topic the priviliged data from 
         simulation.
@@ -167,9 +167,9 @@ def priviliged_data_publisher(sim: simulation):
     except rospy.ROSInterruptException:
         print('\033[1;93m[w]\033[0m Topic "priviliged_data" was stopped.')
 
-def joint_angles_setter(sim: simulation):
+def joint_angles_setter(sim: Simulation):
     try:
-        def actuate_joints(data: joint_angles, sim: simulation=sim):
+        def actuate_joints(data: joint_angles, sim: Simulation=sim):
             """
                 Moves the robot's joints to a target position determined by a message 
                 received through a ROS topic
@@ -184,9 +184,9 @@ def joint_angles_setter(sim: simulation):
     except rospy.ROSInterruptException:
         print('\033[1;93m[w]\033[0m Topic "spot_joints" was stopped.')
 
-def reset_simulation_subscriber(sim: simulation):
+def reset_simulation_subscriber(sim: Simulation):
     try:
-        def reset(data: text, sim: simulation=sim):
+        def reset(data: text, sim: Simulation=sim):
             """
                 Reset simulation.
             """
@@ -345,7 +345,7 @@ if __name__ == '__main__':
 
     # Initialize simulation
     print('\033[1;36m[i]\033[0m Starting simulation')
-    sim = simulation(args.spot_urdf, gui=args.gui)
+    sim = Simulation(args.spot_urdf, gui=args.gui)
     sim.reset(terrain_file, X_INIT, Y_INIT) 
 
     # Run rosnode for spot-mini

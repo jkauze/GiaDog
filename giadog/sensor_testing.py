@@ -8,7 +8,7 @@
 
 import pybullet as p
 import pybullet_data as pd
-from src.bullet_dataclasses import *
+from giadog.src.simulation.bullet_dataclasses import *
 import time
 import numpy as np
 
@@ -83,7 +83,7 @@ def sensor_output(robot, actuated_joints_ids, toes_ids, terrain, output_type = "
 
 	if output_type == "dataclass":
 
-		return sensors_state([roll, pitch, yaw],[ω_x, ω_y, ω_z], joint_angles, toe_states)
+		return SensorsState([roll, pitch, yaw],[ω_x, ω_y, ω_z], joint_angles, toe_states)
 
 	elif output_type == "list":
 

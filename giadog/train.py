@@ -8,7 +8,8 @@ from src.terrain_curriculum import *
 try: import rospy
 except: pass
 
-from src.agents import teacher_agent, ars_agent
+from src.agents import *
+from src.simulation import *
 
 
 # Cargamos las variables de entorno
@@ -105,8 +106,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    terrain = terrain_gen.steps(ROWS, COLS, 0.7, 0.0, 1)
-    terrain_gen.save(terrain, TERRAIN_FILE)
+    terrain = steps(ROWS, COLS, 0.7, 0.0, 1)
+    save_terrain(terrain, TERRAIN_FILE)
 
     init_terrain_args = {
         'type'   : 'steps', 
@@ -129,7 +130,7 @@ if __name__ == '__main__':
 
         train_envs = []
         for _ in range(args.threads):
-            sim = simulation(args.spot_urdf, gui=args.gui)
+            sim = Simulation(args.spot_urdf, gui=args.gui)
             sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
             sim.reset(TERRAIN_FILE, X_INIT, Y_INIT)
 

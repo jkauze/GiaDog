@@ -8,7 +8,6 @@
 # Utilities
 import numpy as np
 from typing import *
-from time import time
 from random import randint
 
 # OpenIA Gym
@@ -16,8 +15,7 @@ import gym
 from gym import spaces
 
 # Simulation
-from src.terrain_gen import *
-from src.simulation import simulation
+from src.simulation import Simulation
 try:
     import rospy
     import message_filters
@@ -27,9 +25,10 @@ except:
     print(f'\033[1;93m[w]\033[0m Warning: Executing giadog_gym without ROS.')
 
 # Controller
-from src.inverse_kinematics import *
-from src.foot_trajectory_generator import *
-
+from src.kinematics import *
+from src.simulation import *
+import json
+from time import time
 
 # Cargamos las variables de entorno
 with open('.env.json', 'r') as f:
@@ -86,7 +85,7 @@ class teacher_giadog_env(gym.Env):
     JOINT_VEL_HISTORY_LEN = 2
     JOINT_ERR_HISTORY_LEN = 2
 
-    def __init__(self, sim: Optional[simulation]=None):
+    def __init__(self, sim: Optional[Simulation]=None):
         self.observation_space = spaces.Dict({
             # Non-priviliged Space
             'target_dir': spaces.Box(
@@ -239,7 +238,7 @@ class teacher_giadog_env(gym.Env):
         self.joint_err_hist = np.zeros((self.JOINT_ERR_HISTORY_LEN, 12))
         self.joint_angles = np.zeros((12,))
         self.joint_velocities = np.zeros((12,))
-        self.transf_matrix = np.zeros((4,4,4))
+        self.transf_matrices = np.zeros((4,4,4))
         self.external_force  = np.zeros((3,))
         self.ftg_phases = np.zeros((8,))
         self.ftg_freqs = np.zeros((4,))
@@ -428,7 +427,7 @@ class teacher_giadog_env(gym.Env):
         self.joint_vel_hist[0]     = self.joint_velocities
 
         self.joint_velocities      = n_data.joint_velocities  
-        self.transf_matrix         = np.reshape(n_data.transf_matrix, (4,4,4))
+        self.transf_matrices         = np.reshape(n_data.transf_matrices, (4,4,4))
         self.is_fallen             = n_data.is_fallen
         self.foot_current_pos      = n_data.foot_current_pos
 
@@ -464,7 +463,7 @@ class teacher_giadog_env(gym.Env):
         self.joint_vel_hist[0]     = self.joint_velocities
         self.joint_velocities      = self.sim.joint_velocities 
 
-        self.transf_matrix = self.sim.transf_matrix
+        self.transf_matrices = self.sim.transf_matrices
         self.external_force = self.sim.external_force
 
         if self.count == 100:
@@ -527,14 +526,14 @@ class teacher_giadog_env(gym.Env):
 
             [TODO]
         """
-        ftg_data = calculate_foot_trajectories(action, self.timestep)
+        ftg_data = foot_trajectories(action, self.timestep)
         self.feet_target_pos, self.ftg_freqs, self.ftg_phases = ftg_data
         self.ftg_phases = np.reshape(self.ftg_phases, -1)
 
         joints_angles_target = []
         for i in range(4):
             r_o = self.feet_target_pos[i]
-            T_i = self.transf_matrix[i]
+            T_i = self.transf_matrices[i]
             r = T_i @ np.concatenate((r_o, [1]), axis = 0)
             r = r[:3]
 
@@ -562,19 +561,19 @@ class teacher_giadog_env(gym.Env):
             [TODO]
         """
         # We create the terrain
-        if type == 'hills': terrain = terrain_gen.hills(*args, **kwargs)
-        elif type == 'steps': terrain = terrain_gen.steps(*args, **kwargs)
-        elif type == 'stairs': terrain = terrain_gen.stairs(*args, **kwargs)
+        if type == 'hills': terrain = hills(*args, **kwargs)
+        elif type == 'steps': terrain = steps(*args, **kwargs)
+        elif type == 'stairs': terrain = stairs(*args, **kwargs)
 
         # A random goal is selected
-        x, y = terrain_gen.set_goal(terrain, 3)
+        x, y = set_goal(terrain, 3)
         x = x / MESH_SCALE[0] - ROWS / (2 * MESH_SCALE[0])
         y = y / MESH_SCALE[1] - COLS / (2 * MESH_SCALE[1])
         self.target_dir = np.array([x, y])
         self.turn_dir = randint(-1, 1)
 
         # We store the terrain in a file
-        terrain_gen.save(terrain, TERRAIN_FILE)
+        save_terrain(terrain, TERRAIN_FILE)
 
     def reset(self, terrain_file: str=''):
         """

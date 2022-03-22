@@ -105,7 +105,7 @@ sudo docker run \
     -e J2D_D3D=false \
     -it \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -v $PWD/src:/usr/src/GiaDog/src/spot_mini_ros \
+    -v $PWD/src:/usr/src/GiaDog/giadog/spot_mini_ros \
     giadog
 ```
 

@@ -1,8 +1,7 @@
 from re import X
-from src.simulation import simulation
+from src.simulation import *
 from src.giadog_gym import teacher_giadog_env 
-from src.policy_networks import teacher_network
-from src.value_networks import teacher_value_network
+from src.agents import *
 from src.PPO import PPO_CLIP
 from src.TRPO import TRPO
 import pybullet as p
@@ -12,8 +11,8 @@ from tensorflow.keras.optimizers import Adam
 
 if __name__ == '__main__':
     # Create simulation
-    spot_urdf_file = 'src/mini_ros/urdf/spot.urdf'
-    sim = simulation(spot_urdf_file, p,
+    spot_urdf_file = 'giadog/mini_ros/urdf/spot.urdf'
+    sim = Simulation(spot_urdf_file, p,
                 self_collision_enabled=False)
 
     
@@ -26,7 +25,7 @@ if __name__ == '__main__':
     obs_space = env.observation_space
     policy = teacher_network(action_space = ac_space,
                         observation_space = obs_space)
-    value_function = teacher_value_network()
+    value_function = TeacherValueNetwork()
     print("# # # Policy Initialized # # #")
     policy_optimizer = Adam(lr=0.001)
     value_function_optimizer = Adam(lr=0.001)

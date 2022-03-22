@@ -4,7 +4,6 @@
 
     [TODO]
 """
-import pickle
 from typing import *
 from src.giadog_gym import *
 from dataclasses import dataclass
