@@ -3,8 +3,8 @@ import json
 import pathlib
 import argparse
 from time import time, sleep
-from src.giadog_gym import *
-from src.terrain_curriculum import *
+from src.training.GiadogGym import *
+from src.training.TerrainCurriculum import *
 try: import rospy
 except: pass
 
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     if args.ros:
         rospy.init_node('train', anonymous=True)
         sim = None 
-        train_envs = [teacher_giadog_env(sim)]
+        train_envs = [TeacherEnv(sim)]
         train_envs[0].make_terrain(**init_terrain_args)
 
     else:
@@ -134,10 +134,10 @@ if __name__ == '__main__':
             sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
             sim.reset(TERRAIN_FILE, X_INIT, Y_INIT)
 
-            train_envs.append(teacher_giadog_env(sim))
+            train_envs.append(TeacherEnv(sim))
             train_envs[-1].make_terrain(**init_terrain_args)
 
     print('Running!')
-    tc = terrain_curriculum(train_envs)
+    tc = TerrainCurriculum(train_envs)
     tc.train()
 

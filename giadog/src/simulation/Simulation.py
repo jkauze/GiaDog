@@ -6,12 +6,12 @@
 """
 
 # Utilities
-import time
 import numpy as np
 from typing import *
-from src.simulation.__env__ import MESH_SCALE, GRAVITY_VECTOR, \
-    SIM_SECONDS_PER_STEP, TOES_IDS, EXTERNAL_FORCE_MAGN, JOINTS_IDS, \
-    THIGHS_IDS, SHANKS_IDS, HIPS_IDS, LEG_SPAN, EXTERNAL_FORCE_TIME
+from time import sleep
+from src.__env__ import MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
+    TOES_IDS, EXTERNAL_FORCE_MAGN, JOINTS_IDS, THIGHS_IDS, SHANKS_IDS, \
+    HIPS_IDS, EXTERNAL_FORCE_TIME
 
 # Simulacion
 import pybullet as p
@@ -107,8 +107,7 @@ class Simulation(object):
         # Other data
         self.base_rpy         = np.zeros([3])
         self.transf_matrices  = np.zeros([4,4,4])
-        self.joint_torques    = np.zeros(12)
-        self.feet_current_pos = np.zeros([4,3])
+        self.joint_torques    = np.zeros([12])
         self.is_fallen        = False
 
         # For debug
@@ -228,7 +227,7 @@ class Simulation(object):
         # Set random external force
         self.__set_external_force()
         self.external_force_applied = False
-        self.timestep = 0
+        self.timestep = 0.0
 
     def __apply_force(self, F: List[float]):
         """
@@ -553,26 +552,6 @@ class Simulation(object):
         """
         self.transf_matrices = transformations_matrices(self.base_rpy)
 
-    def update_feet_current_pos(self):
-        """
-            Update the current foot position, relative to the Hi frame 
-            below each hip
-        """
-        toes_info = self.p.getLinkStates(self.quadruped, TOES_IDS)
-        hips_info = self.p.getLinkStates(self.quadruped, HIPS_IDS)
-
-        for i, (toe_link_state, hip_link_state) in enumerate(zip(toes_info, hips_info)):
-            toe_link_state =  LinkState(*toe_link_state)
-            hip_link_state =  LinkState(*hip_link_state)
-
-            hip_pos = np.array(hip_link_state.worldLinkFramePosition)
-            toe_pos = np.array(toe_link_state.worldLinkFramePosition)
-            self.feet_current_pos[i] = toe_link_state.linkWorldPosition
-            # We calculate the Hi frame  relative to the leg base position (hip)
-            p_li_Hi = np.array([0, H_OFF * (-1)**i, -LEG_SPAN])
-            
-            self.feet_current_pos[i] = toe_pos -  hip_pos - p_li_Hi
-
     def update_is_fallen(self):
         """
             Update the state that indicates whether the quadruped has fallen.
@@ -637,7 +616,6 @@ class Simulation(object):
         self.update_external_force()
         self.update_base_rpy()
         self.update_transf_matrices()
-        self.update_feet_current_pos()
         self.update_is_fallen()
 
     # =========================== DEBUGGING FUNCTIONS =========================== #
@@ -872,7 +850,7 @@ class Simulation(object):
         while True: 
             self.p.stepSimulation()
             self.update_height_scan()
-            time.sleep(1/240)
+            sleep(1/240)
             t = t+1
             if t % 120 == 0: self.draw_height_field_lines()
 
@@ -902,7 +880,7 @@ class Simulation(object):
         while True: 
             self.p.stepSimulation()
             self.update_sensor_output()
-            time.sleep(1/240)
+            sleep(1/240)
             t = t+1
             if t%30 == 0:
                 print(self.ground_friction)
@@ -947,7 +925,7 @@ class Simulation(object):
         while True: 
             self.p.stepSimulation()
             self.update_sensor_output()
-            time.sleep(1/240)
+            sleep(1/240)
             
             
             t = t+1
@@ -1011,7 +989,7 @@ class Simulation(object):
         while True: 
             self.p.stepSimulation()
             self.update_sensor_output()
-            time.sleep(1/240) 
+            sleep(1/240) 
             
             # 
             if t%5 == 0:

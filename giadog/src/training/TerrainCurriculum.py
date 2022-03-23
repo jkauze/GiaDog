@@ -5,30 +5,13 @@
     [TODO]
 """
 from typing import *
-from src.giadog_gym import *
 from dataclasses import dataclass
+from src.training.GiadogGym import *
 from random import randint, choice, choices, uniform
 from multiprocessing import Process, Queue, JoinableQueue
-
-
-# Cargamos las variables de entorno
-with open('.env.json', 'r') as f:
-    ENV = json.load(f)
-# Obtenemos las constantes necesarias
-N_TRAJ           = ENV["TRAIN"]["N_TRAJ"]
-P_REPLAY         = ENV["TRAIN"]["P_REPLAY"]
-N_EVALUATE       = ENV["TRAIN"]["N_EVALUATE"]
-N_PARTICLES      = ENV["TRAIN"]["N_PARTICLES"]
-P_TRANSITION     = ENV["TRAIN"]["P_TRANSITION"]
-MIN_DESIRED_TRAV = ENV["TRAIN"]["MIN_DESIRED_TRAV"]
-MAX_DESIRED_TRAV = ENV["TRAIN"]["MAX_DESIRED_TRAV"]
-RANDOM_STEP_PROP = ENV["TRAIN"]["RANDOM_STEP_PROP"]
-ROWS             = ENV["SIMULATION"]["ROWS"]
-COLS             = ENV["SIMULATION"]["COLS"]
-TERRAIN_FILE     = ENV["SIMULATION"]["TERRAIN_FILE"]
-HILLS_RANGE      = ENV["HILLS_RANGE"]
-STEPS_RANGE      = ENV["STEPS_RANGE"]
-STAIRS_RANGE     = ENV["STAIRS_RANGE"]
+from src.__env__ import N_TRAJ, P_REPLAY, N_EVALUATE, N_PARTICLES, \
+    P_TRANSITION, MIN_DESIRED_TRAV, MAX_DESIRED_TRAV, RANDOM_STEP_PROP, \
+    ROWS, TERRAIN_FILE, HILLS_RANGE, STEPS_RANGE, STAIRS_RANGE
 
 RANGES = {
     'hills'  : HILLS_RANGE,
@@ -52,7 +35,7 @@ INIT_VALUES = {
 }
 
 @dataclass
-class particle:
+class Particle:
     type: str
     parameters: Dict[str, float]
     traverability: List[float]
@@ -60,7 +43,7 @@ class particle:
     measurement_prob: float=0.0
 
     def copy(self):
-        return particle(
+        return Particle(
             self.type,
             self.parameters.copy(),
             self.traverability.copy(),
@@ -75,13 +58,13 @@ class particle:
 
         return string
 
-class trajectory_generator(Process):
+class TrajectoryGenerator(Process):
     """
         [TODO]
     """
     def __init__(
             self, 
-            gym_env: teacher_giadog_env, 
+            gym_env: TeacherEnv, 
             task_queue: JoinableQueue,
             result_queue: Queue
         ):
@@ -91,9 +74,12 @@ class trajectory_generator(Process):
         self.result_queue = result_queue
 
     def run(self):
-        from src.neural_networks import teacher_nn
+        from src.agents import TeacherNetwork
         
-        model = teacher_nn()
+        model = TeacherNetwork(
+            self.gym_env.action_space, 
+            self.gym_env.observation_space
+        )
 
         while True:
             # Get task
@@ -126,44 +112,49 @@ class trajectory_generator(Process):
             self.task_queue.task_done()
             self.result_queue.put((p, trajectory))
 
-
-class terrain_curriculum:
+class TerrainCurriculum:
     """
         [TODO]
     """
-    def __init__(self, gym_envs: List[teacher_giadog_env]):
+    def __init__(self, gym_envs: List[TeacherEnv]):
         assert len(gym_envs) > 0, 'Must be one or more gym environments.'
 
         hills_C_t  = [
-            particle('hills', INIT_VALUES['hills'].copy(), [0] * N_TRAJ * N_EVALUATE) 
+            Particle('hills', INIT_VALUES['hills'].copy(), [0] * N_TRAJ * N_EVALUATE) 
             for _ in range(N_PARTICLES)
         ]
         steps_C_t  = [
-            particle('steps', INIT_VALUES['steps'].copy(), [0] * N_TRAJ * N_EVALUATE) 
+            Particle('steps', INIT_VALUES['steps'].copy(), [0] * N_TRAJ * N_EVALUATE) 
             for _ in range(N_PARTICLES)
         ]
         stairs_C_t = [
-            particle('stairs', INIT_VALUES['stairs'].copy(), [0] * N_TRAJ * N_EVALUATE) 
+            Particle('stairs', INIT_VALUES['stairs'].copy(), [0] * N_TRAJ * N_EVALUATE) 
             for _ in range(N_PARTICLES)
         ]
         self.C_t = hills_C_t + steps_C_t + stairs_C_t
         self.C_t_history  = [[p.copy() for p in self.C_t]]
 
-        p = Process(target=self.__new_model)
+        p = Process(
+            target=self.__new_model, 
+            args=(gym_envs[0].action_space, gym_envs[0].observation_space)
+        )
         p.start()
         p.join()
 
         self.tasks = JoinableQueue()
         self.results = Queue()
         self.traj_generators = [
-            trajectory_generator(env, self.tasks, self.results) for env in gym_envs
+            TrajectoryGenerator(env, self.tasks, self.results) for env in gym_envs
         ]
         for generator in self.traj_generators: generator.start()
 
     @staticmethod
-    def __new_model():
-        from src.neural_networks import teacher_nn
-        teacher_nn().save('model_checkpoint/')
+    def __new_model(action_space, observation_space):
+        from src.agents import TeacherNetwork
+        TeacherNetwork(
+            action_space, 
+            observation_space
+        ).save('model_checkpoint/')
 
     def __compute_measurement_probs(self):
         """
@@ -212,7 +203,7 @@ class terrain_curriculum:
         )
         self.C_t = [p.copy() for p in hills_C_t + steps_C_t + stairs_C_t]
 
-    def __random_walk(self, p: particle) -> particle:
+    def __random_walk(self, p: Particle) -> Particle:
         """
             [TODO]
         """

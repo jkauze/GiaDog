@@ -2,15 +2,15 @@
     Authors: Amin Arriaga, Eduardo Lopez
     Project: Graduation Thesis: GIAdog
 
-    File containing the code in charge of the automatic generation of simulated terrain.
+    File containing the code in charge of the automatic generation of simulated 
+    terrain.
 """
 import numpy as np
 from typing import *
 from random import uniform
 import matplotlib.pyplot as plt
 from perlin_noise import PerlinNoise
-from src.simulation.__env__ import SCALE, STEPS_FREQUENCY, STEPS_NOISE, \
-    ZONE_STAIRS_WIDTH
+from src.__env__ import SCALE, STEPS_FREQUENCY, STEPS_NOISE, ZONE_STAIRS_WIDTH
 
 
 def __terrain(rows: int, cols: int) -> np.ndarray:

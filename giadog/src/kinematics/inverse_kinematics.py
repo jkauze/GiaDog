@@ -16,7 +16,7 @@
 """
 import numpy as np
 from typing import *
-from src.kinematics.__env__ import H_OFF, V_OFF, SHANK_L, THIGH_L
+from src.__env__ import H_OFF, V_OFF, SHANK_L, THIGH_L
 
 
 def __get_IK_params(x: float, y: float, z: float) -> Tuple[float, float]:

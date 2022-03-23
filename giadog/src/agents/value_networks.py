@@ -5,72 +5,84 @@
     [TODO: DESCRIPTION]
 
 """
+import numpy as np
+from typing import *
+from gym import spaces
 from tensorflow import keras
-from tensorflow.keras import layers
+from src.agents.Network import *
+from src.__env__ import PRIVILIGED_DATA, NON_PRIVILIGED_DATA, \
+    PRIVILIGED_DATA_SHAPE, NON_PRIVILIGED_DATA_SHAPE
 
-class TeacherValueNetwork:
-    """
-    Teacher value network class.
-    """
+class TeacherValueNetwork(Network):
+    """ Teacher value network class. """
     
-    def __init__(self):
+    def __init__(self, observation_space: spaces.Dict):
         """
-        Initializes the teacher value network.
+            Initializes the teacher value network.
+
+            Arguments:
+            ----------
+                observation_space: gym.spaces.Dict
+                    The observation space of the environment
         """
-    
-        self.PRIVILIGED_DATA_SHAPE = 59
-        self.NON_PRIVILIGED_DATA_SHAPE = 145
-        
+        self.observation_space = observation_space
+
         inputs_x_t = keras.Input(
-            shape=self.PRIVILIGED_DATA_SHAPE, 
+            shape=PRIVILIGED_DATA_SHAPE, 
             name='priviliged_data'
         )
 
         inputs_o_t = keras.Input(
-            shape=self.NON_PRIVILIGED_DATA_SHAPE,
+            shape=NON_PRIVILIGED_DATA_SHAPE,
             name='non_priviliged_data')
 
 
-        concat = layers.Concatenate()([inputs_x_t, inputs_o_t])
+        concat = keras.layers.Concatenate()([inputs_x_t, inputs_o_t])
         
-        x = layers.Dense(256, activation='tanh')(concat)
-        x = layers.Dense(128, activation='tanh')(x)
-        x = layers.Dense(64, activation='tanh')(x)
-        x = layers.Dense(16, activation='tanh')(x)
-        outputs = layers.Dense(1)(x)
-        self.model = keras.Model(inputs =  [inputs_x_t, inputs_o_t], 
-                                 outputs = outputs, 
-                                 name='value network')
+        x = keras.layers.Dense(256, activation='tanh')(concat)
+        x = keras.layers.Dense(128, activation='tanh')(x)
+        x = keras.layers.Dense(64, activation='tanh')(x)
+        x = keras.layers.Dense(16, activation='tanh')(x)
+        outputs = keras.layers.Dense(1)(x)
+        self.model = keras.Model(
+            inputs= [inputs_x_t, inputs_o_t], 
+            outputs=outputs, 
+            name='value network'
+        )
+
+    def __format_states(
+            self, 
+            states: List[Dict[str, np.array]]
+        ) -> Tuple[np.array, np.array]:
+        """
+            Get dictionary states and convert them to numpy arrays.
+        """
+        input_x_t = np.array([
+            np.concatenate([np.reshape(s[d], -1) for d in PRIVILIGED_DATA])
+            for s in states
+        ])
+
+        input_o_t = np.array([
+            np.concatenate([np.reshape(s[d], -1) for d in NON_PRIVILIGED_DATA])
+            for s in states
+        ])
+
+        return input_x_t, input_o_t
     
-    def __call__(self, state):
+    def __call__(self, states: Dict[str, np.array]):
         """
-        Computes the value of the state.
-
-        Arguments:
-        ----------
-        state: np.array -- The state of the environment.
-        """
-        
-        return self.model(state)
-
-    def save(self, path: str):
-        """
-            Saves the model weights to a directory
+            Computes the value of the states.
 
             Arguments:
             ----------
-                path: str 
-                    Path where the model will be saved.
+                states: Dict[str, numpy.array]
+                    States to process
         """
-        self.model.save_weights(path)
+        # Get network input
+        assert self.verify_states(states)
+        input_x_t, input_o_t = self.__format_states(states)
 
-    def load(self, path: str):
-        """
-            Loads the model weights from a directory.
+        return self.model([input_x_t, input_o_t])
 
-            Arguments:
-            ----------
-                path: str 
-                    Path to the file where the weights will be loaded.
-        """
-        self.model.load_weights(path)
+class StudentValueNetwork(Network):
+    pass
