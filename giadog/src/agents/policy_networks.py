@@ -8,7 +8,7 @@ import numpy as np
 from tcn import TCN
 from tensorflow import keras, clip_by_value, Variable
 from tensorflow.keras import layers
-from src.distributions import make_dist
+from src.agents.Distribution import *
 
 
 from gym import spaces
@@ -123,9 +123,13 @@ class teacher_network(object):
 
         # Other variables
         # Get the policy distribution
-        self.policy_dist = make_dist(action_space)
+        self.policy_dist = DiagGaussian(
+            action_space.shape[0],
+            np.zeros(16,),
+            np.ones((16,))
+        )
 
-        log_std = VariableLayer(self.policy_dist._ndim)([inputs_x_t, 
+        log_std = VariableLayer(self.policy_dist.ndim)([inputs_x_t, 
                                                         inputs_o_t])
         
         # Log std (for the Gaussian distribution) 
@@ -159,9 +163,9 @@ class teacher_network(object):
 
         #input_x_t, input_o_t = input
         
-        mean, log_std = self.model(input)
+        params = self.model(input)
 
-        self.policy_dist.set_param([mean, log_std])
+        self.policy_dist.set_param(*params)
         
         if greedy:
             result = self.policy_dist.greedy_sample()
@@ -183,67 +187,25 @@ class teacher_network(object):
 
         return result
 
-    def save_model_weights(self, path: str, epoch: int):
+    def save(self, path: str):
         """
-            Saves the teacher model weights to a file and also saves separetly 
-            the classifier model weights.The format of the files are: .ckpt
+            Saves the model weights to a directory
 
             Arguments:
             ----------
-            path: str -- Path to the file where the model will be saved.
-            epoch: int -- Epoch number (Is to indicate the creation of).
+                path: str 
+                    Path where the model will be saved.
+        """
+        self.model.save_weights(path)
 
-            Returns:
-            --------
-            None
+    def load(self, path: str):
         """
-        self.model.save_weights(path + '_epoch_' + str(epoch) + '.ckpt')
-        self.classifier.save_weights(path + '_classifier_epoch_' + str(epoch)\
-         + '.ckpt')
-    
-    def save_model(self, path: str, epoch: int):
-        """
-            Saves the full teacher model to a file and also saves separetly the
-            classifier model. The format of the files are: .h5
+            Loads the model weights from a directory.
 
             Arguments:
             ----------
-            path: str -- Path to the file where the model will be saved.
-            epoch: int -- Epoch number (Is to indicate the creation of).
-
-            Returns:
-            --------
-            None
-        """
-        self.model.save(path + '_epoch_' + str(epoch) + '.ckpt')
-        self.classifier.save(path + '_classifier_epoch_' + str(epoch) + '.ckpt')
-    
-    def load_model(self, path:str):
-        """
-            Loads the model from a .h5 file.
-
-            Note: The model that it is going to be loaded should be the same as
-                    the teacher model. 
-
-            Arguments:
-            ----------
-            path: str -- Path to the file where the model will be loaded.
-                         The file must be a .h5 file.
-        """
-
-        self.model = keras.models.load_model(path)
-    
-    def load_weights(self, path:str):
-        """
-            Loads the weights from a .ckpt file.
-
-            Note: The weights must be saved with the save_model_weights method.
-                  And are the teacher model weights, (not the classifier 
-                  weights).
-            Arguments:
-            ----------
-            path: str -- Path to the file where the weights will be loaded.
-                         The file must be a .ckpt file.
+                path: str 
+                    Path to the file where the weights will be loaded.
         """
         self.model.load_weights(path)
     

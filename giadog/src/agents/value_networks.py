@@ -1,11 +1,14 @@
-# Machine Learning
+"""
+    Authors: Amin Arriaga, Eduardo Lopez
+    Project: Graduation Thesis: GIAdog
 
+    [TODO: DESCRIPTION]
+
+"""
 from tensorflow import keras
 from tensorflow.keras import layers
 
-
-
-class teacher_value_network(object):
+class TeacherValueNetwork:
     """
     Teacher value network class.
     """
@@ -49,4 +52,25 @@ class teacher_value_network(object):
         """
         
         return self.model(state)
-    
+
+    def save(self, path: str):
+        """
+            Saves the model weights to a directory
+
+            Arguments:
+            ----------
+                path: str 
+                    Path where the model will be saved.
+        """
+        self.model.save_weights(path)
+
+    def load(self, path: str):
+        """
+            Loads the model weights from a directory.
+
+            Arguments:
+            ----------
+                path: str 
+                    Path to the file where the weights will be loaded.
+        """
+        self.model.load_weights(path)

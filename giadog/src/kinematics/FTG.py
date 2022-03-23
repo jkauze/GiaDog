@@ -16,21 +16,11 @@
         https://iit-dlslab.github.io/papers/barasuol13icra.pdf
 
 """
-import json
 import numpy as np
 from typing import *
+from src.kinematics.__env__ import F_0, H, H_Z, SIGMA_0
 
-# Cargamos las variables de entorno
-with open('.env.json', 'r') as f:
-    ENV = json.load(f)
-# Obtenemos las constantes necesarias
-H       = ENV["ROBOT"]["MAX_FOOT_HEIGHT"]
-F_0     = ENV["ROBOT"]["GAIT_FREQUENCY"]
-H_Z     = np.asarray(ENV["PHYSICS"]["LEG_HORIZONTAL_Z_COMPONENT"])
-SIGMA_0 = np.pi * np.asarray(ENV["ROBOT"]["INIT_FOOT_PHASES"])
-
-
-def FTG(sigma_i_0: float, t: float, f_i: float) -> Tuple[np.array, float] :
+def FTG(sigma_i_0: float, t: float, f_i: float) -> Tuple[np.array, float]:
     """
         Generates a vector in R^3 representing the desired foot position (end 
         efector) in the H_i frame corresponding to the robots i-th leg 
@@ -54,23 +44,24 @@ def FTG(sigma_i_0: float, t: float, f_i: float) -> Tuple[np.array, float] :
                 representing the target foot position.
 
             float
-                FTG frequency. This output is used as an input of the neural network
+                FTG frequency. This output is used as an input of the neural 
+                network
     """
 
     sigma_i = (sigma_i_0 + t * (F_0 + f_i)) % (2 * np.pi)
     k = 2 * (sigma_i - np.pi) / np.pi
-    
     param = 0 # 0.5
     
     if 0 < k < 1: 
-        return (H * (-2 * k ** 3 + 3 * k ** 2) - param) * H_Z, sigma_i
+        position = (H * (-2 * k ** 3 + 3 * k ** 2) - param) * H_Z
     elif 1 < k < 2: 
-        return (H * (2 * k ** 3 - 9 * k ** 2 + 12 * k - 4) - param) * H_Z,\
-                 sigma_i
+        position = (H * (2 * k ** 3 - 9 * k ** 2 + 12 * k - 4) - param) * H_Z
     else: 
-        return - param * H_Z, sigma_i
+        position = - param * H_Z
 
-def calculate_foot_trajectories(
+    return position, sigma_i
+
+def foot_trajectories(
         theta: np.array, 
         t: float
     ) -> Tuple[np.array, np.array, np.array]:
@@ -91,8 +82,8 @@ def calculate_foot_trajectories(
         Returns:
         -------
             numpy.array, shape(4,3)
-                Desired foot positions in the H_i frame corresponding to the robots i-th 
-                leg horizontal frame below its hip.
+                Desired foot positions in the H_i frame corresponding to the 
+                robots i-th leg horizontal frame below its hip.
             
             numpy.array, shape(4,)
                 Foot Trajectory Generator frequencies of each leg.

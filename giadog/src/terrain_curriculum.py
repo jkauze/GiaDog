@@ -4,7 +4,6 @@
 
     [TODO]
 """
-import pickle
 from typing import *
 from src.giadog_gym import *
 from dataclasses import dataclass
@@ -92,13 +91,14 @@ class trajectory_generator(Process):
         self.result_queue = result_queue
 
     def run(self):
-        #from src.neural_networks import teacher_nn
+        from src.neural_networks import teacher_nn
         
+        model = teacher_nn()
+
         while True:
             # Get task
             p, k, m = self.task_queue.get()
-            with open('modelo.pickle', 'rb') as file:
-                model = pickle.load(file)
+            model.load('model_checkpoint/')
 
             # Generate terrain using C_t
             self.gym_env.make_terrain(
@@ -151,6 +151,8 @@ class terrain_curriculum:
 
         p = Process(target=self.__new_model)
         p.start()
+        p.join()
+
         self.tasks = JoinableQueue()
         self.results = Queue()
         self.traj_generators = [
@@ -160,11 +162,8 @@ class terrain_curriculum:
 
     @staticmethod
     def __new_model():
-        return
         from src.neural_networks import teacher_nn
-
-        with open('modelo.pickle', 'wb') as file:
-            pickle.dump(teacher_nn(), file)
+        teacher_nn().save('model_checkpoint/')
 
     def __compute_measurement_probs(self):
         """
