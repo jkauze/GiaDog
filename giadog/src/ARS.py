@@ -1,61 +1,41 @@
 import numpy as np
 from typing import *
 
-class teacher_agent():
-
-    def __init__(self, model, env):
-        """
-        model: keras model
-        """
-        self.model = model
-
-        self.priviliged_data = env.PRIVILIGED_DATA
-
-        self.non_priviliged_data = env.NON_PRIVILIGED_DATA
-
-    
-    def action(self, obs: Dict[str, Any]) -> np.array:
-        """
-        Given an observation, the agent returns an action.
-        """
-        
-        input_x_t = np.concatenate(
-            [np.reshape(obs[data],-1) for data in self.priviliged_data]
-        )
-        
-        input_o_t = np.concatenate(
-            [np.reshape(obs[data],-1) for data in self.non_priviliged_data]
-        )
-
-        
-        return self.model.predict(
-            np.array([input_x_t], dtype=np.float32), 
-            np.array([input_o_t], dtype=np.float32)
-        )
-
-    
-    def update(self):
-        pass
-
-
-
-
 
 class ars_agent():
 
     def __init__(self, agent_params):
 
         """
-        agent_params: dict
+        Creates an instance of an ARS agent.
+        (Augmented Random Search)
+
+        Arguments
+        ---------
+
+        agent_params: dict. Dictionary of the agent parameters.
+
+        The parameters are the following:
 
         agent_params = {
-            "step size": float, # a.k.a. learning rate
+            "step size"                      : float, 
+                * a.k.a. learning rate
+            
             "directions sampled by iteration": int,
-            "exploration standard deviation noise": float, # Debe ser menor a 1
+                * number of directions sampled by iteration
+            
+            "exploration standard deviation noise": float,
+                * The standard deviation of the noise added to the weights
+                  must be < 1.0 and > 0.0
+            
             "number of top directions to use": int,
+                * number of top directions to use for updating the policy
+            
             "enviroment": openAI gym enviroment, 
-            "train episode steps": int # Numero de steps que cada exploracion tendra H. (N es el nuemro de exploraciones) 
-        }
+                * Gym enviroment to be used to train the agent
+            
+            "train episode steps": int 
+                * Number of steps the exploration will run for.
 
 
         """
@@ -90,11 +70,13 @@ class ars_agent():
 
         delta = self.sample_deltas()  
 
-        # Calculamos los pares de recompensas
+        # [ESP] Calculamos los pares de recompensas
+        # [ENG] Calculate the pairs of rewards
+        r_pos = [self.explore(self.theta + delta_i * self.nu, terrain_file) for 
+                                delta_i in delta]
 
-        r_pos = [self.explore(self.theta + delta_i * self.nu, terrain_file) for delta_i in delta]
-
-        r_neg = [self.explore(self.theta - delta_i * self.nu, terrain_file) for delta_i in delta]
+        r_neg = [self.explore(self.theta - delta_i * self.nu, terrain_file) for 
+                                delta_i in delta]
 
         # Concatenamos las listas de recompensas y calculamos la desviasion
         # Estandar de las recompensas: sigma_r
