@@ -16,9 +16,6 @@ import tensorflow as tf
 
 import time
 
-#from rlzoo.common.utils import *
-#from rlzoo.common.policy_networks import *
-#from rlzoo.common.value_networks import *
 
 
 EPS = 1e-8  # epsilon (Epsilon parameter to avoid zero division)
@@ -74,10 +71,10 @@ class PPO_CLIP(object):
         Arguments:
         ---------
 
-        tfs: state
-        tfa: action
-        tfadv: advantage
-        oldpi_prob: old policy distribution
+        tfs: -> List. State list.
+        tfa: -> List. Action list
+        tfadv: -> List. Advantage list
+        oldpi_prob: -> Tensor. Old policy distribution
         
         Returns:
         -------
@@ -108,20 +105,20 @@ class PPO_CLIP(object):
                             self.epsilon) * tfadv))
         # Compute the gradient of the loss with respect to the policy network
         a_gard = tape.gradient(aloss, self.actor.model.trainable_weights)
-        #a_grad_sigma = tape.gradient(aloss, self.actor.log_std)
         # Apply the gradient to the policy network
         # (See that the apply gradient is used with the optimizer)
-        self.actor_opt.apply_gradients(zip(a_gard, self.actor.model.trainable_weights))
-        #self.actor_opt.apply_gradients(zip(a_grad_sigma, self.actor.log_std))
+        self.actor_opt.apply_gradients(zip(
+                a_gard, self.actor.model.trainable_weights
+                ))
 
     def c_train(self, tfdc_r, s):
         """
-        Update critic network
+        Updates the critic network. (Train the critic network).
         
         Arguments:
         ---------
-        :param tfdc_r: cumulative reward
-        :param s: state
+        tfdc_r:-> List  .List of cumulative rewards
+        s     :-> List  .List of states
 
         
         Returns:
@@ -145,20 +142,23 @@ class PPO_CLIP(object):
         grad = tape.gradient(closs, self.critic.model.trainable_weights)
         # Apply the gradient to the critic network
         # (See that the apply gradient is used with the optimizer)
-        self.critic_opt.apply_gradients(zip(grad, self.critic.model.trainable_weights))
+        self.critic_opt.apply_gradients(zip(
+            grad, self.critic.model.trainable_weights
+            ))
 
     def cal_adv(self, tfs, tfdc_r):
         """
-        Calculates advantage
+        Calculates the advantage given a list of states and a list of cumulative 
+        rewards.
         
         Arguments:
         ---------
-        :param tfs: state
-        :param tfdc_r: cumulative reward
+        tfs   :-> List. List of states
+        tfdc_r:-> List. List cumulative rewards
 
         Returns:
         -------
-        advantage: advantage value
+        advantage:->numpy.array. Advantage value
         
         """
         tfdc_r = np.array(tfdc_r, dtype=np.float32)
@@ -167,14 +167,14 @@ class PPO_CLIP(object):
 
     def update(self, s, a, r, a_update_steps, c_update_steps):
         """
-
-        Update parameter with the constraint of KL divergent/
+        Updates the critic and value networks with the constraint of KL 
+        divergence. 
 
         Arguments:
         ---------
-        :param s: state
-        :param a: act
-        :param r: reward
+        s: -> List. List of states
+        a: -> List. List of actions
+        r: -> List. List of cumulative rewards
         
         Returns:
         -------
@@ -198,11 +198,15 @@ class PPO_CLIP(object):
     def get_action(self, s):
         """
 
-        Compute the agent action given an state s.
+        Compute the agent action given a list of states s.
+
+        (The computation is performed for all of the states in the list but the,
+        output is only for the first one)
+
 
         Arguments:
         ---------
-        s: state
+        s: -> List. List of states.
 
         Returns:
         -------
@@ -214,10 +218,12 @@ class PPO_CLIP(object):
     def get_action_greedy(self, s):
         """
         Compute the agent action given an state s, based on a greedy policy.
+        (The computation is performed for all of the states in the list but the,
+        output is only for the first one)
 
         Arguments:
         ---------
-        s: state
+        s: -> List. List of states.
 
         Returns:
         -------
@@ -227,11 +233,13 @@ class PPO_CLIP(object):
 
     def get_value(self, s):
         """
-        Compute the value of a given state (Using the critic network).
+        Computes the value of a given state list (Using the critic network).
+        (The computation is performed for all of the states in the list but the,
+        output is only for the first one)
 
         Arguments:
         ---------
-        s: state
+        s: -> List. List of states.
 
         Returns:
         -------
@@ -245,24 +253,6 @@ class PPO_CLIP(object):
             pass
         res = self.critic(s)[0, 0]
         return res
-
-    """
-    def save_ckpt(self, env_name):
-    """
-    """save trained weights
-    :return: None"""
-    """
-    save_model(self.actor, 'actor', self.name, env_name)
-    save_model(self.critic, 'critic', self.name, env_name)
-
-    def load_ckpt(self, env_name):
-    """
-    """load trained weights
-    :return: None"""
-    """
-    load_model(self.actor, 'actor', self.name, env_name)
-    load_model(self.critic, 'critic', self.name, env_name)
-    """
 
     def learn(self, env, train_episodes=200, test_episodes=100, max_steps=200, save_interval=10,
               gamma=0.9, mode='train', render=False, batch_size=32, a_update_steps=10, c_update_steps=10,
