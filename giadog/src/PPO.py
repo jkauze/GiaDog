@@ -16,9 +16,6 @@ import tensorflow as tf
 
 import time
 
-#from rlzoo.common.utils import *
-#from rlzoo.common.policy_networks import *
-#from rlzoo.common.value_networks import *
 
 
 EPS = 1e-8  # epsilon (Epsilon parameter to avoid zero division)
