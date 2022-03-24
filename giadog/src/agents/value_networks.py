@@ -9,9 +9,9 @@ import numpy as np
 from typing import *
 from gym import spaces
 import tensorflow as tf
+from agents.Network import *
 from tensorflow import keras
-from src.agents.Network import *
-from src.__env__ import PRIVILIGED_DATA, NON_PRIVILIGED_DATA, \
+from __env__ import PRIVILIGED_DATA, NON_PRIVILIGED_DATA, \
     PRIVILIGED_DATA_SHAPE, NON_PRIVILIGED_DATA_SHAPE
 
 class TeacherValueNetwork(Network):

@@ -106,38 +106,23 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    terrain = steps(ROWS, COLS, 0.7, 0.0, 1)
-    save_terrain(terrain, TERRAIN_FILE)
-
-    init_terrain_args = {
-        'type'   : 'steps', 
-        'rows'   : ROWS, 
-        'cols'   : COLS, 
-        'width'  : 0.7, 
-        'height' : 0.0, 
-        'seed'   : 1
-    }
+    print(f'\033[1;36m[i]\033[0m # {"="*20} STARTING TRAINING {"="*20} #')
 
     if args.ros:
         rospy.init_node('train', anonymous=True)
         sim = None 
         train_envs = [TeacherEnv(sim)]
-        train_envs[0].make_terrain(**init_terrain_args)
 
     else:
         # Initialize simulation
-        print('\033[1;36m[i]\033[0m Starting simulations')
+        print(f'\033[1;36m[i]\033[0m Starting {args.threads} simulations...')
 
         train_envs = []
         for _ in range(args.threads):
             sim = Simulation(args.spot_urdf, gui=args.gui)
             sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
-            sim.reset(TERRAIN_FILE, X_INIT, Y_INIT)
-
             train_envs.append(TeacherEnv(sim))
-            train_envs[-1].make_terrain(**init_terrain_args)
 
-    print('Running!')
     tc = TerrainCurriculum(train_envs)
     tc.train()
 

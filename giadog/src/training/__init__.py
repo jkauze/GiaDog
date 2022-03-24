@@ -1,4 +1,8 @@
-from src.training.GiadogGym import *
-from src.training.TerrainCurriculum import *
-from src.training.TRPO import *
-from src.training.PPO import *
+import os, sys
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+sys.path.append(os.path.dirname(os.path.realpath(f'{__file__}/..')))
+
+from PPO import *
+from TRPO import *
+from GiadogGym import *
+from TerrainCurriculum import *

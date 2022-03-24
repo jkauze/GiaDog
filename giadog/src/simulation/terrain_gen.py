@@ -10,7 +10,7 @@ from typing import *
 from random import uniform
 import matplotlib.pyplot as plt
 from perlin_noise import PerlinNoise
-from src.__env__ import SCALE, STEPS_FREQUENCY, STEPS_NOISE, ZONE_STAIRS_WIDTH
+from __env__ import SCALE, STEPS_FREQUENCY, STEPS_NOISE, ZONE_STAIRS_WIDTH
 
 
 def __terrain(rows: int, cols: int) -> np.ndarray:

@@ -18,7 +18,7 @@
 """
 import numpy as np
 from typing import *
-from src.__env__ import F_0, H, H_Z, SIGMA_0
+from __env__ import F_0, H, H_Z, SIGMA_0
 
 def FTG(sigma_i_0: float, t: float, f_i: float) -> Tuple[np.array, float]:
     """
@@ -91,7 +91,6 @@ def foot_trajectories(
             numpy.array, shape(4,)
                 Foot Trajectory Generator phases of each leg.
     """
-    theta = theta[0] # Temporary fix for theta shape
     target_foot_positions = np.zeros([4,3])
     FTG_frequencies = np.zeros([4])
     FTG_phases = np.zeros([4,2])

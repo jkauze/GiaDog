@@ -14,9 +14,9 @@ import copy
 import time
 import numpy as np
 import tensorflow as tf
-from src.agents import *
-from src.__env__ import EPSILON
-from src.training.GiadogGym import TeacherEnv
+from agents import *
+from __env__ import EPSILON
+from training.GiadogGym import TeacherEnv
 
 
 class TRPO(object):
@@ -620,7 +620,7 @@ class TRPO(object):
 
                     # Get environment reward
                     buffer_rewards.append(reward)
-                    cumulative_it_reward += reward
+                    cumulative_it_reward += float(reward)
 
                     # Update TRPO
                     if (ep + 1)%batch_size == 0 or ep == max_steps - 1 or done:
@@ -654,9 +654,9 @@ class TRPO(object):
                 # Print iteration information
                 print(
                     'ITERATION: {it}/{iterations} | ' +
-                    'Cumulative reward: {:.4f}'.format(cumulative_it_reward) +
-                    'Iteration time: {:.4f}'.format(time.time() - t) + 
-                    'Cumulative time: {:.4f}'.format(time.time() - t0)
+                    'Cumulative reward: {:.4f} | '.format(cumulative_it_reward) +
+                    'Iteration time: {:.4f} | '.format(time.time() - t) + 
+                    'Cumulative time: {:.4f} | '.format(time.time() - t0)
                 )
                 t = time()
 
@@ -685,15 +685,15 @@ class TRPO(object):
                 for _ in range(max_steps):
                     action = self.get_action_greedy(state)
                     state, reward, done, _ = env.step(action)
-                    cumulative_it_reward += reward
+                    cumulative_it_reward += float(reward)
                     if done: break
 
                 # Print iteration information
                 print(
                     'ITERATION: {it}/{iterations} | ' +
-                    'Cumulative reward: {:.4f}'.format(cumulative_it_reward) +
-                    'Iteration time: {:.4f}'.format(time.time() - t) + 
-                    'Cumulative time: {:.4f}'.format(time.time() - t0)
+                    'Cumulative reward: {:.4f} | '.format(cumulative_it_reward) +
+                    'Iteration time: {:.4f} | '.format(time.time() - t) + 
+                    'Cumulative time: {:.4f} | '.format(time.time() - t0)
                 )
                 t = time()
 

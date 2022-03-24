@@ -16,7 +16,7 @@
 """
 import numpy as np
 from typing import *
-from src.__env__ import H_OFF, V_OFF, SHANK_L, THIGH_L
+from __env__ import H_OFF, V_OFF, SHANK_L, THIGH_L
 
 
 def __get_IK_params(x: float, y: float, z: float) -> Tuple[float, float]:

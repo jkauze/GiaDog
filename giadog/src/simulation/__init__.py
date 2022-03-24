@@ -1,2 +1,6 @@
-from src.simulation.terrain_gen import *
-from src.simulation.Simulation import *
+import os, sys
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+sys.path.append(os.path.dirname(os.path.realpath(f'{__file__}/..')))
+
+from Simulation import *
+from terrain_gen import *

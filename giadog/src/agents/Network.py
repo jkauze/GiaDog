@@ -1,6 +1,7 @@
 import numpy as np
 from typing import *
 
+
 class Network(object):
     def __init__(self): raise NotImplementedError
 

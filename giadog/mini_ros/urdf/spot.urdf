@@ -41,7 +41,12 @@
   <!-- <xacro:include filename="$(find mini_ros)/urdf/accessories.urdf.xacro" /> -->
   <!-- Robot description -->
   <!-- STATIC Links -->
-  <link name="base_link"/>
+  <link name="base_link">
+    <inertial>
+      <mass value="0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
   <link name="base_inertia">
     <visual>
       <origin rpy="0 0 1.57079632679" xyz="-0.16 0.035 -0.045"/>

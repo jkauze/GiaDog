@@ -6,7 +6,7 @@
 """
 import numpy as np
 from typing import *
-from src.__env__ import H_OFF, LEG_SPAN
+from __env__ import H_OFF, LEG_SPAN
 
 
 def __rotation_matrix(theta) :

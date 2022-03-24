@@ -4,34 +4,33 @@
 
     Description Gym enviroment for the training of the control policies
 """
-
 # Utilities
 import numpy as np
 from typing import *
 from time import time
 from random import randint
+from collections import OrderedDict
 
 # OpenIA Gym
 import gym
 from gym import spaces
 
 # Simulation
-from src.simulation import Simulation
+from simulation import Simulation
 try:
     import rospy
     import message_filters
     from spot_mini_ros.msg import JointAngles, NonPriviliged, ExtraData, \
         Priviliged, Text, Timestep
-except:
-    print(f'\033[1;93m[w]\033[0m Warning: Executing giadog_gym without ROS.')
+except: pass
 
 # Controller
-from src.kinematics import *
-from src.simulation import *
-from src.__env__ import QUEUE_SIZE, GOAL_RADIUS_2, MAX_ITER_TIME, \
+from kinematics import *
+from simulation import *
+from __env__ import QUEUE_SIZE, GOAL_RADIUS_2, MAX_ITER_TIME, \
     MIN_DESIRED_VEL, BASE_FREQ, VEL_TH, SWIGN_PH, GRAVITY_VECTOR, \
     TERRAIN_FILE, MESH_SCALE, ROWS, COLS, HISTORY_LEN, FOOT_HISTORY_LEN, \
-    JOINT_VEL_HISTORY_LEN, JOINT_ERR_HISTORY_LEN
+    JOINT_VEL_HISTORY_LEN, JOINT_ERR_HISTORY_LEN, EPSILON
 
 
 class TeacherEnv(gym.Env):
@@ -72,120 +71,120 @@ class TeacherEnv(gym.Env):
             [TODO]
         """
         # We set the observation and action space
-        self.observation_space = spaces.Dict({
+        self.observation_space = spaces.Dict(OrderedDict([
             # Non-priviliged Space
-            'command_dir': spaces.Box(
-                low = -np.inf * np.ones((2,)), 
-                high = np.inf * np.ones((2,)),
+            ('command_dir', spaces.Box(
+                low = np.float32(-np.inf * np.ones((2,))), 
+                high = np.float32(np.inf * np.ones((2,))),
                 dtype = np.float32
-            ),
-            'turn_dir': spaces.Box(
-                low = -np.ones((1,)), 
-                high = np.ones((1,)),
+            )),
+            ('turn_dir', spaces.Box(
+                low = np.int8(-np.ones((1,))), 
+                high = np.int8(np.ones((1,))),
                 dtype = np.int8
-            ),
-            'gravity_vector': spaces.Box(
-                low = -np.inf * np.ones((3,)), 
-                high = np.inf * np.ones((3,)),
+            )),
+            ('gravity_vector', spaces.Box(
+                low = np.float32(-np.inf * np.ones((3,))), 
+                high = np.float32(np.inf * np.ones((3,))),
                 dtype = np.float32
-            ),
-            'angular_vel': spaces.Box(
-                low = -np.inf * np.ones((3,)), 
-                high = np.inf * np.ones((3,)),
+            )),
+            ('angular_vel', spaces.Box(
+                low = np.float32(-np.inf * np.ones((3,))), 
+                high = np.float32(np.inf * np.ones((3,))),
                 dtype = np.float32
-            ),
-            'linear_vel': spaces.Box(
-                low = -np.inf * np.ones((3,)), 
-                high = np.inf * np.ones((3,)),
+            )),
+            ('linear_vel', spaces.Box(
+                low = np.float32(-np.inf * np.ones((3,))), 
+                high = np.float32(np.inf * np.ones((3,))),
                 dtype = np.float32
-            ),
-            'joint_angles': spaces.Box(
-                low = np.zeros((12,)), 
-                high = 2 * np.pi * np.ones((12,)),
+            )),
+            ('joint_angles', spaces.Box(
+                low = np.float32(-np.inf * np.ones((12,))), 
+                high = np.float32(np.inf * np.ones((12,))),
                 dtype = np.float32
-            ),
-            'joint_vels': spaces.Box(
-                low = -np.inf * np.ones((12,)), 
-                high = np.inf * np.ones((12,)),
+            )),
+            ('joint_vels', spaces.Box(
+                low = np.float32(-np.inf * np.ones((12,))), 
+                high = np.float32(np.inf * np.ones((12,))),
                 dtype = np.float32
-            ),
-            'ftg_phases': spaces.Box(
-                low = -np.ones((8,)),
-                high = np.ones((8,)),
+            )),
+            ('ftg_phases', spaces.Box(
+                low = np.float32(-np.ones((8,))),
+                high = np.float32(np.ones((8,))),
                 dtype = np.float32
-            ),
-            'ftg_freqs': spaces.Box(
-                low = -np.inf * np.ones((4,)), 
-                high = np.inf * np.ones((4,)),
+            )),
+            ('ftg_freqs', spaces.Box(
+                low = np.float32(-np.inf * np.ones((4,))), 
+                high = np.float32(np.inf * np.ones((4,))),
                 dtype = np.float32
-            ),
-            'base_freq': spaces.Box(
-                low = -np.inf * np.ones((1,)),
-                high = np.inf * np.ones((1,)),
+            )),
+            ('base_freq', spaces.Box(
+                low = np.float32(-np.inf * np.ones((1,))),
+                high = np.float32(np.inf * np.ones((1,))),
                 shape = (1,),
-                dtype = np.float
-            ),
-            'joint_err_hist': spaces.Box(
-                low = np.zeros((JOINT_ERR_HISTORY_LEN, 12)),
-                high = 2 * np.pi * np.ones((JOINT_ERR_HISTORY_LEN, 12)),
-                dtype = np.float
-            ),
-            'joint_vel_hist': spaces.Box(
-                low = -np.inf * np.ones((JOINT_VEL_HISTORY_LEN, 12)),
-                high = np.inf * np.ones((JOINT_VEL_HISTORY_LEN, 12)),
-                dtype = np.float
-            ),
-            'feet_target_hist': spaces.Box(
-                low = -np.inf * np.ones((FOOT_HISTORY_LEN, 4, 3)),
-                high = np.inf * np.ones((FOOT_HISTORY_LEN, 4, 3)),
-                dtype = np.float
-            ),
-            'toes_contact': spaces.Box(
-                low = np.zeros((4,)), 
-                high = np.ones((4,)),
+                dtype = np.float32
+            )),
+            ('joint_err_hist', spaces.Box(
+                low = np.float32(np.zeros((JOINT_ERR_HISTORY_LEN, 12))),
+                high = np.float32(np.inf * np.ones((JOINT_ERR_HISTORY_LEN, 12))),
+                dtype = np.float32
+            )),
+            ('joint_vel_hist', spaces.Box(
+                low = np.float32(-np.inf * np.ones((JOINT_VEL_HISTORY_LEN, 12))),
+                high = np.float32(np.inf * np.ones((JOINT_VEL_HISTORY_LEN, 12))),
+                dtype = np.float32
+            )),
+            ('feet_target_hist', spaces.Box(
+                low = np.float32(-np.inf * np.ones((FOOT_HISTORY_LEN, 4, 3))),
+                high = np.float32(np.inf * np.ones((FOOT_HISTORY_LEN, 4, 3))),
+                dtype = np.float32
+            )),
+            ('toes_contact', spaces.Box(
+                low = np.int8(np.zeros((4,))), 
+                high = np.int8(np.ones((4,))),
                 dtype = np.int8
-            ),
-            'thighs_contact': spaces.Box(
-                low = np.zeros((4,)), 
-                high = np.ones((4,)),
+            )),
+            ('thighs_contact', spaces.Box(
+                low = np.int8(np.zeros((4,))), 
+                high = np.int8(np.ones((4,))),
                 dtype = np.int8
-            ),
-            'shanks_contact': spaces.Box(
-                low = np.zeros((4,)), 
-                high = np.ones((4,)),
+            )),
+            ('shanks_contact', spaces.Box(
+                low = np.int8(np.zeros((4,))), 
+                high = np.int8(np.ones((4,))),
                 dtype = np.int8
-            ),
+            )),
 
             # Privileged Space 
-            'normal_foot': spaces.Box(
-                low = -np.inf * np.ones((4, 3)), 
-                high = np.inf * np.ones((4, 3)),
+            ('normal_foot', spaces.Box(
+                low = np.float32(-np.inf * np.ones((4, 3))), 
+                high = np.float32(np.inf * np.ones((4, 3))),
                 dtype = np.float32
-            ), 
-            'height_scan': spaces.Box(
-                low = -np.inf * np.ones((4, 9)), 
-                high = np.inf * np.ones((4, 9)),
+            )), 
+            ('height_scan', spaces.Box(
+                low = np.float32(-np.inf * np.ones((4, 9))), 
+                high = np.float32(np.inf * np.ones((4, 9))),
                 dtype = np.float32
-            ), 
-            'foot_forces': spaces.Box(
-                low = -np.inf * np.ones((4,)), 
-                high = np.inf * np.ones((4,)),
+            )), 
+            ('foot_forces', spaces.Box(
+                low = np.float32(-np.inf * np.ones((4,))), 
+                high = np.float32(np.inf * np.ones((4,))),
                 dtype = np.float32
-            ), 
-            'foot_friction': spaces.Box(
-                low = -np.inf * np.ones((4,)), 
-                high = np.inf * np.ones((4,)),
+            )), 
+            ('foot_friction', spaces.Box(
+                low = np.float32(-np.inf * np.ones((4,))), 
+                high = np.float32(np.inf * np.ones((4,))),
                 dtype = np.float32
-            ),
-            'external_force': spaces.Box(
-                low = -np.inf * np.ones((3,)), 
-                high = np.inf * np.ones((3,)),
+            )),
+            ('external_force', spaces.Box(
+                low = np.float32(-np.inf * np.ones((3,))), 
+                high = np.float32(np.inf * np.ones((3,))),
                 dtype = np.float32
-            )
-        })
+            ))
+        ]))
         self.action_space = spaces.Box(
-            low = -float('inf') * np.ones((16,)),
-            high = float('inf') * np.ones((16,)),
+            low = np.float32(-np.inf * np.ones((16,))),
+            high = np.float32(np.inf * np.ones((16,))),
             dtype = np.float32
         )
 
@@ -244,6 +243,8 @@ class TeacherEnv(gym.Env):
         """ 
             [TODO] 
         """
+        self.meta = False 
+
         # Non-priviliged data
         self.command_dir      : np.array = np.ones((2,))
         self.turn_dir         : np.array = np.zeros((1,))
@@ -447,7 +448,8 @@ class TeacherEnv(gym.Env):
         self.shanks_contact   = self.sim.shanks_contact 
 
         self.command_dir = self.target_dir - self.position[:2]
-        self.command_dir = self.command_dir / np.linalg.norm(self.command_dir)
+        norm = np.linalg.norm(self.command_dir) + EPSILON
+        self.command_dir = self.command_dir / norm
 
         # Priviliged data
         self.normal_toe      = self.sim.normal_toe
@@ -480,39 +482,40 @@ class TeacherEnv(gym.Env):
         # We calculate the distance between the position of the robot and the target
         d_vector = self.target_dir - np.array(self.position[:2])
         d = d_vector @ d_vector
+        self.meta = d < GOAL_RADIUS_2
 
-        return d < GOAL_RADIUS_2 or self.timestep > MAX_ITER_TIME or self.is_fallen
+        return self.timestep > MAX_ITER_TIME or self.is_fallen
 
     def get_obs(self) -> Dict[str, Any]: 
         """
             [TODO]
         """
-        return {
+        return OrderedDict([
             # Non-priviliged Data
-            'command_dir'      : self.command_dir,
-            'turn_dir'         : self.turn_dir,
-            'gravity_vector'   : self.gravity_vector,
-            'angular_vel'      : self.angular_vel,
-            'linear_vel'       : self.linear_vel,
-            'joint_angles'     : self.joint_angles,
-            'joint_vels'       : self.joint_velocities,
-            'ftg_phases'       : self.ftg_phases,
-            'ftg_freqs'        : self.ftg_freqs,
-            'base_freq'        : self.base_freq,
-            'joint_err_hist'   : self.joint_err_hist,
-            'joint_vel_hist'   : self.joint_vel_hist,
-            'feet_target_hist' : self.feet_target_hist,
-            'toes_contact'     : self.toes_contact,
-            'thighs_contact'   : self.thighs_contact,
-            'shanks_contact'   : self.shanks_contact,
+            ('command_dir'      , np.array(self.command_dir     , dtype=np.float32)),
+            ('turn_dir'         , np.array(self.turn_dir        , dtype=np.int8)),
+            ('gravity_vector'   , np.array(self.gravity_vector  , dtype=np.float32)),
+            ('angular_vel'      , np.array(self.angular_vel     , dtype=np.float32)),
+            ('linear_vel'       , np.array(self.linear_vel      , dtype=np.float32)),
+            ('joint_angles'     , np.array(self.joint_angles    , dtype=np.float32)),
+            ('joint_vels'       , np.array(self.joint_velocities, dtype=np.float32)),
+            ('ftg_phases'       , np.array(self.ftg_phases      , dtype=np.float32)),
+            ('ftg_freqs'        , np.array(self.ftg_freqs       , dtype=np.float32)),
+            ('base_freq'        , np.array(self.base_freq       , dtype=np.float32)),
+            ('joint_err_hist'   , np.array(self.joint_err_hist  , dtype=np.float32)),
+            ('joint_vel_hist'   , np.array(self.joint_vel_hist  , dtype=np.float32)),
+            ('feet_target_hist' , np.array(self.feet_target_hist, dtype=np.float32)),
+            ('toes_contact'     , np.array(self.toes_contact    , dtype=np.int8)),
+            ('thighs_contact'   , np.array(self.thighs_contact  , dtype=np.int8)),
+            ('shanks_contact'   , np.array(self.shanks_contact  , dtype=np.int8)),
 
             # Priviliged Data
-            'normal_foot'    : self.normal_toe, 
-            'height_scan'    : self.height_scan, 
-            'foot_forces'    : self.toes_force1, 
-            'foot_friction'  : self.ground_friction,
-            'external_force' : self.external_force
-        }
+            ('normal_foot'    , np.array(self.normal_toe     , dtype=np.float32)), 
+            ('height_scan'    , np.array(self.height_scan    , dtype=np.float32)), 
+            ('foot_forces'    , np.array(self.toes_force1    , dtype=np.float32)), 
+            ('foot_friction'  , np.array(self.ground_friction, dtype=np.float32)),
+            ('external_force' , np.array(self.external_force , dtype=np.float32))
+        ])
 
     def step(self, action: np.array) -> Tuple[dict, float, bool, dict]:
         """
@@ -550,7 +553,7 @@ class TeacherEnv(gym.Env):
         N = JOINT_ERR_HISTORY_LEN
         self.joint_err_hist[1:N] = self.joint_err_hist[0:N-1]
         joint_err = np.abs(np.array(joints_angles_target) - np.array(self.joint_angles))
-        self.joint_err_hist[0]   = np.reshape(joint_err, (4,3))
+        self.joint_err_hist[0]   = np.reshape(joint_err, (12,))
 
         return observation, reward, done, info
 
@@ -595,7 +598,6 @@ class TeacherEnv(gym.Env):
 
         self.trajectory = []
         return self.get_obs()
-
 
     def traverability(self) -> float:
         """

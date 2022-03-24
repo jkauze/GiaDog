@@ -3,11 +3,11 @@ from typing import *
 
 # Machine Learning
 import numpy as np
+from Network import *
 from gym import spaces
-from src.agents.Network import *
-from src.agents.Distribution import *
+from Distribution import *
 from tensorflow import keras, clip_by_value
-from src.__env__ import PRIVILIGED_DATA, NON_PRIVILIGED_DATA, \
+from __env__ import PRIVILIGED_DATA, NON_PRIVILIGED_DATA, \
     PRIVILIGED_DATA_SHAPE, NON_PRIVILIGED_DATA_SHAPE, CLASSIFIER_INPUT_SHAPE
 
 

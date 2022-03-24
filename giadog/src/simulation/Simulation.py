@@ -9,14 +9,14 @@
 import numpy as np
 from typing import *
 from time import sleep
-from src.__env__ import MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
+from __env__ import MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
     TOES_IDS, EXTERNAL_FORCE_MAGN, JOINTS_IDS, THIGHS_IDS, SHANKS_IDS, \
     HIPS_IDS, EXTERNAL_FORCE_TIME
 
 # Simulacion
 import pybullet as p
-from src.kinematics import *
-from src.simulation.bullet_dataclasses import *
+from kinematics import *
+from bullet_dataclasses import *
 import pybullet_utils.bullet_client as bc
 
 
@@ -292,7 +292,7 @@ class Simulation(object):
                     frame).
                     Default: 0.0
         """
-        print(f'\033[1;36m[i]\033[0m Restarting simulation.')
+        print(f'\n\033[1;36m[i]\033[0m Restarting simulation.')
         self.terrain_file = terrain_file
         
         # This array is used to calculate the robot toes heightfields 
@@ -481,7 +481,7 @@ class Simulation(object):
         """
             Updates the contact info for each shank for the current simulation step.
         """
-        self.shanks_contact = np.zeros([4], dtype=np.int)
+        self.shanks_contact = np.zeros([4], dtype=np.int8)
         for i, shank_id in enumerate(SHANKS_IDS):
             shank_contact_info = self.p.getContactPoints(
                 bodyA  = self.quadruped, 
