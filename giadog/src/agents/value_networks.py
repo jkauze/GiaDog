@@ -8,6 +8,7 @@
 import numpy as np
 from typing import *
 from gym import spaces
+import tensorflow as tf
 from tensorflow import keras
 from src.agents.Network import *
 from src.__env__ import PRIVILIGED_DATA, NON_PRIVILIGED_DATA, \
@@ -69,7 +70,7 @@ class TeacherValueNetwork(Network):
 
         return input_x_t, input_o_t
     
-    def __call__(self, states: Dict[str, np.array]):
+    def __call__(self, states: Dict[str, np.array]) -> tf.Tensor:
         """
             Computes the value of the states.
 
@@ -77,6 +78,11 @@ class TeacherValueNetwork(Network):
             ----------
                 states: Dict[str, numpy.array]
                     States to process
+
+            Return:
+            -------
+                tensorf.Tensor
+                    Value computed
         """
         # Get network input
         assert self.verify_states(states)

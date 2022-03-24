@@ -2,7 +2,9 @@
     Authors: Amin Arriaga, Eduardo Lopez
     Project: Graduation Thesis: GIAdog
 
-    Trust Region Policy Optimization (with support for Natural Policy Gradient)
+    Trust Region Policy Optimization (with support for Natural Policy Gradient).
+
+    This imlementation is a modification of the RLZoo implementation of PPO
 
     References:
     -----------
@@ -32,28 +34,28 @@ class TRPO(object):
             delta: float=0.01
         ):
         """
-        Arguments
-        ---------
-            actor: TeacherNetwork
-                Neural network that works as policy.
+            Arguments
+            ---------
+                actor: TeacherNetwork
+                    Neural network that works as policy.
 
-            critic: TeacherValueNetwork
-                Neural network that works as critic.
-            
-            critic_optimizer: tensorflow.keras.optimizers.Optimizer
-                Critic Training Optimizer.
+                critic: TeacherValueNetwork
+                    Neural network that works as critic.
+                
+                critic_optimizer: tensorflow.keras.optimizers.Optimizer
+                    Critic Training Optimizer.
 
-            damping_coeff: float, optional
-                Artifact for numerical stability.
-                Default: 0.1
+                damping_coeff: float, optional
+                    Artifact for numerical stability.
+                    Default: 0.1
 
-            cg_iters: int, optional
-                Number of iterations of conjugate gradient to perform.
-                Default: 10
+                cg_iters: int, optional
+                    Number of iterations of conjugate gradient to perform.
+                    Default: 10
 
-            delta: float, optional
-                KL-divergence limit for TRPO update.
-                Default: 0.01
+                delta: float, optional
+                    KL-divergence limit for TRPO update.
+                    Default: 0.01
         """
         self.name = 'TRPO'
         self.actor = actor
@@ -194,7 +196,7 @@ class TRPO(object):
     def advantage(
             self, 
             states: List[Dict[str, np.array]], 
-            cumul_reward: tf.Tensor
+            cumul_rewards: tf.Tensor
         ) -> np.array:
         """
             Calculate advantage from a state.
@@ -204,20 +206,21 @@ class TRPO(object):
                 states: List[Dict[str, numpy.array]]
                     State list.
 
-                cumul_reward: tensorflow.Tensor
-                    Cumulative reward.
+                cumul_rewards: tensorflow.Tensor
+                    List of cumulative rewards.
 
             Return:
+            -------
                 numpy.array
                     Advantage.
         """
-        cumul_reward = np.array(cumul_reward, dtype=np.float32)
-        adv = cumul_reward - self.critic(states)
-        return adv.numpy()
+        cumul_rewards = np.array(cumul_rewards, dtype=np.float32)
+        advantage = cumul_rewards - self.critic(states)
+        return advantage.numpy()
 
     def critic_value(self, state: Dict[str, np.array]) -> tf.Tensor:
         """
-            Compute value from critic.
+            Computes the value of a given state list (Using the critic network).
             
             Parameters:
             -----------
@@ -233,7 +236,7 @@ class TRPO(object):
 
     def critic_train(
             self, 
-            cumul_reward: tf.Tensor, 
+            cumul_rewards: tf.Tensor, 
             states: List[Dict[str, np.array]], 
         ):
         """
@@ -241,17 +244,17 @@ class TRPO(object):
 
             Parameters:
             -----------
-                cumul_reward: tensorflow.Tensor
-                    Cumulative reward.
+                cumul_rewards: tensorflow.Tensor
+                    List of cumulative rewards.
 
                 states: List[Dict[str, numpy.array]]
                     State list.
         """
         # Get critic loss
-        cumul_reward = np.array(cumul_reward, dtype=np.float32)
+        cumul_rewards = np.array(cumul_rewards, dtype=np.float32)
         with tf.GradientTape() as tape:
             v = self.critic(states)
-            advantage = cumul_reward - v
+            advantage = cumul_rewards - v
             critic_loss = tf.reduce_mean(tf.square(advantage))
 
         # Compute gradient and update critic
@@ -266,7 +269,7 @@ class TRPO(object):
             states: List[Dict[str, np.array]], 
             actions: List[np.array],  
             advantage: np.array, 
-            oldpi_prob: tf.Tensor
+            old_actor_prob: tf.Tensor
         ) -> Tuple[tf.Tensor, tf.Tensor]:
         """
             Objective Function.
@@ -282,7 +285,7 @@ class TRPO(object):
                 advantage: numpy.array 
                     List of advantage obtained in each state.
 
-                oldpi_prob: tensorflow.Tensor
+                old_actor_prob: tensorflow.Tensor
                     Probability obtained by the previous policy.
 
             Returns:
@@ -295,8 +298,8 @@ class TRPO(object):
         """
         # Calculate the ratio between the current policy and the previous one
         self.actor(states)
-        pi_prob = tf.exp(self.actor.policy_dist.logp(actions))
-        ratio = pi_prob / (oldpi_prob + EPSILON)
+        actor_prob = tf.exp(self.actor.policy_dist.logp(actions))
+        ratio = actor_prob / (old_actor_prob + EPSILON)
 
         # Objetive function
         surr = ratio * advantage
@@ -313,7 +316,7 @@ class TRPO(object):
             states: List[Dict[str, np.array]], 
             actions: List[np.array], 
             advantage: np.array, 
-            oldpi_prob: tf.Tensor,
+            old_actor_prob: tf.Tensor,
             v_ph: tf.Tensor
         ) -> tf.Tensor:
         """
@@ -330,7 +333,7 @@ class TRPO(object):
                 advantage: numpy.array 
                     List of advantage obtained in each state.
 
-                oldpi_prob: tensorflow.Tensor
+                old_actor_prob: tensorflow.Tensor
                     Probability obtained by the previous policy.
 
                 v_ph: tensorflow.Tensor
@@ -345,7 +348,7 @@ class TRPO(object):
 
         with tf.GradientTape() as tape1:
             with tf.GradientTape() as tape0:
-                _, kl = self.eval(states, actions, advantage, oldpi_prob)
+                _, kl = self.eval(states, actions, advantage, old_actor_prob)
             # Kullback-Leibler Divergence Gradient (Gradient DKL)
             g = tape0.gradient(kl, params)
 
@@ -391,7 +394,7 @@ class TRPO(object):
             states: List[Dict[str, np.array]], 
             actions: List[np.array], 
             advantage: np.array, 
-            oldpi_prob: tf.Tensor, 
+            old_actor_prob: tf.Tensor, 
             backtrack_iters: int, 
             backtrack_coeff: float
         ):
@@ -407,7 +410,7 @@ class TRPO(object):
                 advantage: numpy.array 
                     List of advantage obtained in each state.
 
-                oldpi_prob: tensorflow.Tensor
+                old_actor_prob: tensorflow.Tensor
                     Probability obtained by the previous policy.
 
                 backtrack_iters: int
@@ -422,7 +425,7 @@ class TRPO(object):
         # Compute the actor objetive function value and the Kullback-Leibler 
         # Divergence
         with tf.GradientTape() as tape:
-            actor_loss, kl = self.eval(states, actions, advantage, oldpi_prob)
+            actor_loss, kl = self.eval(states, actions, advantage, old_actor_prob)
         actor_grad = self.flat_concat(tape.gradient(
             actor_loss, 
             self.actor.model.trainable_weights
@@ -433,7 +436,7 @@ class TRPO(object):
             states, 
             actions, 
             advantage, 
-            oldpi_prob, 
+            old_actor_prob, 
             x
         )
         x = self.conjugate_gradient(Hx, actor_grad)
@@ -449,7 +452,7 @@ class TRPO(object):
 
             # Obtain news actor objetive function value and the Kullback-Leibler 
             # Divergence
-            kl, new_actor_loss = self.eval(states, actions, advantage, oldpi_prob)
+            kl, new_actor_loss = self.eval(states, actions, advantage, old_actor_prob)
 
             # Check the constraint that the divergence is less than a delta 
             # and that the value of the function is less than the previous one.
@@ -464,7 +467,7 @@ class TRPO(object):
             self, 
             states: List[Dict[str, np.array]], 
             actions: List[np.array], 
-            cumul_reward: tf.Tensor, 
+            cumul_rewards: tf.Tensor, 
             train_critic_iters: int, 
             backtrack_iters: int, 
             backtrack_coeff: float
@@ -480,8 +483,8 @@ class TRPO(object):
                 actions: List[numpy.array] 
                     List of actions corresponding to the states.
 
-                cumul_reward: tensorflow.Tensor
-                    Cumulative reward.
+                cumul_rewards: tensorflow.Tensor
+                    List of cumulative rewards.
 
                 train_critic_iters: int
                     Number of times the critic will be updated.
@@ -492,10 +495,10 @@ class TRPO(object):
                 backtrack_coeff: float
                     Decrease coefficient for the Linear Search in TRPO.
         """
-        adv = self.advantage(states, cumul_reward)
-        _ = self.actor(states)
-        oldpi_prob = tf.exp(self.actor.policy_dist.logp(actions))
-        oldpi_prob = tf.stop_gradient(oldpi_prob)
+        adv = self.advantage(states, cumul_rewards)
+        self.actor(states)
+        old_actor_prob = tf.exp(self.actor.policy_dist.logp(actions))
+        old_actor_prob = tf.stop_gradient(old_actor_prob)
         oldpi_param = self.actor.policy_dist.get_param()
         self.old_dist.set_param(*oldpi_param)
 
@@ -503,13 +506,13 @@ class TRPO(object):
             states, 
             actions, 
             adv, 
-            oldpi_prob, 
+            old_actor_prob, 
             backtrack_iters,
             backtrack_coeff
         )
 
         for _ in range(train_critic_iters):
-            self.critic_train(cumul_reward, states)
+            self.critic_train(cumul_rewards, states)
 
     def trpo(
             self, 
@@ -521,7 +524,6 @@ class TRPO(object):
             critic_path: str='models/critic',
             gamma: float=0.9, 
             mode: str='train', 
-            render: bool=False, 
             batch_size: int=32, 
             backtrack_iters: int=10, 
             backtrack_coeff: float=0.8,
@@ -564,10 +566,6 @@ class TRPO(object):
                     Train or test mode.
                     Default: 'train'
 
-                render: bool, optional
-                    Render each step.
-                    Default: False
-
                 batch_size: int, optional
                     Update batch size.
                     Default: 32
@@ -590,6 +588,7 @@ class TRPO(object):
                     Default: None
 
             Return:
+            -------
                 List[float]
                     Cumulative rewards list.
         """
@@ -602,7 +601,6 @@ class TRPO(object):
                 '\033[1;36m***\033[0m INITIALIZING TRAINING\n' +
                 f'Algorithm: {self.name}  | Environment: {env.spec.id}\n'
             )
-
             cumulative_rewards = []
 
             # For every iteration
@@ -612,7 +610,7 @@ class TRPO(object):
                 buffer_states, buffer_actions, buffer_rewards = [], [], []
                 cumulative_it_reward = 0
 
-                # For every ep-th episode
+                # For every episode
                 for ep in range(max_steps):  
                     # Get and apply an action.
                     action = self.get_action(state)
@@ -675,7 +673,7 @@ class TRPO(object):
         # TEST MODE
         elif mode == 'test':
             self.load_models(actor_path, critic_path)
-            print(f'Testing TRPO Algorithm.')
+            print(f'\033[1;36m***\033[0m TESTING TRPO.\n')
             cumulative_rewards = []
 
             # For every iteration
@@ -706,3 +704,4 @@ class TRPO(object):
         else: raise Exception('Unknown mode type: "{mode}"')
 
         return cumulative_rewards
+
