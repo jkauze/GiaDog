@@ -155,4 +155,8 @@ cython_debug/
 .catkin_workspace
 build_isolated/
 devel_isolated/
+models/*
+~models/.gitkeep
+terrains/*
+~terrains/.gitkeep
 .vscode/

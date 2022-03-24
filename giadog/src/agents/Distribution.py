@@ -54,7 +54,7 @@ class DiagGaussian(object):
         return self.mean, self.logstd
 
     def sample(self) -> tf.Tensor:
-        """ Get actions in deterministic or stochastic manner. """
+        """ Get actions in stochastic manner. """
         return self.mean + self.std * np.random.normal(0, 1, np.shape(self.mean))
 
     def greedy_sample(self) -> tf.Tensor:

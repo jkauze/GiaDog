@@ -15,10 +15,7 @@ import numpy as np
 import tensorflow as tf
 
 import time
-
-
-
-EPS = 1e-8  # epsilon (Epsilon parameter to avoid zero division)
+from src.__env__ import EPSILON
 
 
 
@@ -94,7 +91,7 @@ class PPO_CLIP(object):
             # We compute the probability of the actions taken by the actor
             pi_prob = tf.exp(self.actor.policy_dist.logp(tfa))
             # Calculate the ratio between the old and the new policy
-            ratio = pi_prob / (oldpi_prob + EPS)
+            ratio = pi_prob / (oldpi_prob + EPSILON)
 
             # Calculate the surrogate loss. pi_new/pi_old * advantage
             surr = ratio * tfadv

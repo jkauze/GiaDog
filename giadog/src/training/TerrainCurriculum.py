@@ -35,7 +35,7 @@ INIT_VALUES = {
 }
 
 @dataclass
-class Particle:
+class Particle(object):
     type: str
     parameters: Dict[str, float]
     traverability: List[float]
@@ -112,7 +112,7 @@ class TrajectoryGenerator(Process):
             self.task_queue.task_done()
             self.result_queue.put((p, trajectory))
 
-class TerrainCurriculum:
+class TerrainCurriculum(object):
     """
         [TODO]
     """
@@ -150,6 +150,9 @@ class TerrainCurriculum:
 
     @staticmethod
     def __new_model(action_space, observation_space):
+        """
+            [TODO]
+        """
         from src.agents import TeacherNetwork
         TeacherNetwork(
             action_space, 

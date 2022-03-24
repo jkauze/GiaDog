@@ -481,7 +481,7 @@ class TeacherEnv(gym.Env):
         d_vector = self.target_dir - np.array(self.position[:2])
         d = d_vector @ d_vector
 
-        return d < GOAL_RADIUS_2 or self.timestep > MAX_ITER_TIME or self.sim.is_fallen
+        return d < GOAL_RADIUS_2 or self.timestep > MAX_ITER_TIME or self.is_fallen
 
     def get_obs(self) -> Dict[str, Any]: 
         """
@@ -514,7 +514,7 @@ class TeacherEnv(gym.Env):
             'external_force' : self.external_force
         }
 
-    def step(self, action: np.ndarray) -> Tuple[dict, float, bool, dict]:
+    def step(self, action: np.array) -> Tuple[dict, float, bool, dict]:
         """
             Apply an action on the environment
 
@@ -577,18 +577,25 @@ class TeacherEnv(gym.Env):
         """
             Reset simulation.
         """
+        self.__reset_state()
+
         if self.sim == None:
             # Create message
             msg = Text()
             msg.text = terrain_file
             self.reset_pub.publish(msg)
+            sleep(5)
+            self.__update_obs_ros()
         else:
             self.sim.reset(terrain_file)
             self.timestep = 0
             self.count = 0
             self.begin_time = time()
+            self.__update_obs_sim()
 
         self.trajectory = []
+        return self.get_obs()
+
 
     def traverability(self) -> float:
         """

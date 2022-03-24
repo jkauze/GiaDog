@@ -3,7 +3,6 @@ from src.simulation import *
 from src.training import *
 from src.agents import *
 from src.PPO import PPO_CLIP
-from src.TRPO import TRPO
 import pybullet as p
 import numpy as np
 from tensorflow.keras.optimizers import Adam
@@ -55,23 +54,25 @@ if __name__ == '__main__':
     print("# # # Test completed # # #")
     
     print("### Testing TRPO Agent ####")
-    net_list = [value_function, policy]
-    optimizers_list = [value_function_optimizer]# ,policy_optimizer ]
-    trpo_agent = TRPO(net_list, optimizers_list)
+    trpo_agent = TRPO(
+        TeacherNetwork(env.action_space, env.observation_space), 
+        TeacherValueNetwork(env.observation_space),
+        Adam(lr=0.001)
+    )
     print("# # # Agent Initialized # # #")
     states = [obs_space.sample() for _ in range(5)]
     print("# # # Agent policy testing # # #")
-    action = trpo_agent.get_action(states) 
+    action = trpo_agent.get_action(states[0]) 
     print(action)
     print("# # # Agent greedy policy testing # # #")
-    result = trpo_agent.get_action_greedy(states) 
+    result = trpo_agent.get_action_greedy(states[0]) 
     print(result)
     print("# # # Agent value function  testing # # #")
-    result = trpo_agent.get_value(states) 
+    result = trpo_agent.critic_value(states[0]) 
     print(result)
     print("# # # Agent advantage calculation testing # # #")
-    advantage = trpo_agent.cal_adv(states, np.random.randn(5, 1))
-    #print(advantage)
+    advantage = trpo_agent.advantage(states, np.random.randn(5, 1))
+    print(advantage)
     print("# # # Agent policy train testing # # #")
     cal_loss = trpo_agent.update(states, np.random.randn(5, 16), np.random.randn(5, 1), 5, 5, 0.24)
     print("# # # Test completed # # #")

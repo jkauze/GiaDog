@@ -31,6 +31,6 @@ class Network(object):
             Arguments:
             ----------
                 path: str 
-                    Path to the file where the weights will be loaded.
+                    Path to the file where the weights was loaded.
         """
         self.model.load_weights(path)
