@@ -187,6 +187,7 @@ class TeacherEnv(gym.Env):
             high = np.float32(np.inf * np.ones((16,))),
             dtype = np.float32
         )
+        self.target_dir : np.array = np.zeros((2,))
 
         self.__reset_state()
 
@@ -280,7 +281,6 @@ class TeacherEnv(gym.Env):
         self.H                : np.array    = np.zeros((HISTORY_LEN, 60))
         self.transf_matrices  : np.array    = np.zeros((4,4,4)) 
         self.joint_torques    : np.array    = np.zeros((12,))
-        self.target_dir       : np.array    = np.zeros((2,))
 
     def __actuate_joints(self, joint_target_positions: List[float]):
         """
@@ -403,8 +403,9 @@ class TeacherEnv(gym.Env):
         self.thighs_contact   = n_data.thighs_contact 
         self.shanks_contact   = n_data.shanks_contact 
 
-        self.command_dir = self.target_dir - np.array(self.position[:2])
-        self.command_dir = self.command_dir / np.linalg.norm(self.command_dir)
+        self.command_dir = self.target_dir - self.position[:2]
+        norm = np.linalg.norm(self.command_dir) + EPSILON
+        self.command_dir = self.command_dir / norm
 
         # Priviliged data
         self.normal_toe      = np.reshape(p_data.normal_toe, (4,3))
@@ -484,7 +485,7 @@ class TeacherEnv(gym.Env):
         d = d_vector @ d_vector
         self.meta = d < GOAL_RADIUS_2
 
-        return self.timestep > MAX_ITER_TIME or self.is_fallen
+        return self.meta or self.timestep > MAX_ITER_TIME or self.is_fallen
 
     def get_obs(self) -> Dict[str, Any]: 
         """
@@ -557,7 +558,7 @@ class TeacherEnv(gym.Env):
 
         return observation, reward, done, info
 
-    def make_terrain(self, type: str, *args, **kwargs):
+    def make_terrain(self, terrain_file: str, type: str, *args, **kwargs):
         """
             [TODO]
         """
@@ -574,7 +575,7 @@ class TeacherEnv(gym.Env):
         self.turn_dir = randint(-1, 1)
 
         # We store the terrain in a file
-        save_terrain(terrain, TERRAIN_FILE)
+        save_terrain(terrain, terrain_file)
 
     def reset(self, terrain_file: str=''):
         """

@@ -357,11 +357,13 @@ class PPO(object):
                     Update batch size.
                     Default: 32
 
-                actor_update_steps: int
+                actor_update_steps: int, optional
                     Number of times the actor will be updated.
+                    Default: 10
 
-                critic_update_steps: int
+                critic_update_steps: int, optional
                     Number of times the critic will be updated.
+                    Default: 10
 
                 plot_func: Optional[Callable], optional
                     Plot function

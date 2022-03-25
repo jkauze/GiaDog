@@ -43,8 +43,9 @@
   <!-- STATIC Links -->
   <link name="base_link">
     <inertial>
-      <mass value="0"/>
-      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+      <mass value="1"/>
+      <!-- Inertial Axes -->
+      <inertia ixx="0" ixy="0" ixz="0" iyx="0" iyy="0.0011498" iyz="0" izx="0" izy="0" izz="0"/>
     </inertial>
   </link>
   <link name="base_inertia">

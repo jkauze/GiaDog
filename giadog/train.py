@@ -74,7 +74,7 @@ if __name__ == '__main__':
 
     # Simulation arguments
     parser.add_argument(
-        '-r', '--ros',
+        '--ros',
         action='store_const',
         default=False, 
         const=True, 
@@ -85,7 +85,15 @@ if __name__ == '__main__':
         action='store_const',
         default=False, 
         const=True, 
-        help='The simulation GUI will be displayed.',
+        help='The simulation GUI will be displayed. In this case only one ' +\
+            'thread will be used ignoring the -t|--threads flag.',
+    )
+    parser.add_argument(
+        '-m', '---method',
+        choices=['TRPO', 'PPO'],
+        default='TRPO',
+        help='Training method.',
+        metavar='METHOD'
     )
     parser.add_argument(
         '-u', '--spot-urdf',
@@ -103,10 +111,20 @@ if __name__ == '__main__':
             'can only be greater than 1 if the -r,--ros flag is not used.',
         metavar='THREADS'
     )
+    parser.add_argument(
+        '-r', '--resume',
+        action='store_const',
+        default=False, 
+        const=True, 
+        help='Indicates that the training should be continued instead of ' +\
+            'starting a new one.',
+    )
 
     args = parser.parse_args()
     
     print(f'\033[1;36m[i]\033[0m # {"="*20} STARTING TRAINING {"="*20} #')
+
+    if args.gui: args.threads = 1
 
     if args.ros:
         rospy.init_node('train', anonymous=True)
@@ -123,6 +141,6 @@ if __name__ == '__main__':
             sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
             train_envs.append(TeacherEnv(sim))
 
-    tc = TerrainCurriculum(train_envs)
+    tc = TerrainCurriculum(train_envs, args.method, args.resume)
     tc.train()
 

@@ -26,7 +26,7 @@ class Simulation(object):
             self,
             giadog_urdf_file: str,
             gui: bool=False,
-            self_collision_enabled: bool=False,\
+            self_collision_enabled: bool=False,
         ): 
         """
             Arguments:
@@ -46,7 +46,6 @@ class Simulation(object):
         self.p = bc.BulletClient(connection_mode=p.GUI if gui else p.DIRECT)
         self.self_collision_enabled = self_collision_enabled
         self.__reset_state()
-        
 
     def __terrain_height(self, x: float, y: float) -> float:
         """
@@ -105,7 +104,7 @@ class Simulation(object):
         self.external_force  = np.zeros([3])
 
         # Other data
-        self.base_rpy         = np.zeros([3])
+        self.base_rpy         = np.zeros([3]) # TODO
         self.transf_matrices  = np.zeros([4,4,4])
         self.joint_torques    = np.zeros([12])
         self.is_fallen        = False
@@ -177,10 +176,10 @@ class Simulation(object):
         terrain_shape = self.p.createCollisionShape(
             shapeType = self.p.GEOM_HEIGHTFIELD, 
             meshScale = MESH_SCALE,
-            fileName  = self.terrain_file, 
+            fileName  = os.path.realpath(self.terrain_file), 
             heightfieldTextureScaling=128
         )
-        self.terrain = p.createMultiBody(0, terrain_shape)
+        self.terrain = self.p.createMultiBody(0, terrain_shape)
         self.p.resetBasePositionAndOrientation(self.terrain, [0,0,0], [0,0,0,1])
         self.p.setGravity(*self.gravity_vector)
 
@@ -1032,16 +1031,4 @@ class Simulation(object):
             self.actuate_joints(joints_angles)
             t = t+1
 
-
-    
-if __name__ == '__main__':
-    spot_urdf_file = "../mini_ros/urdf/spot.urdf"
-    terrain_file = "../test_terrains/test_terrain.txt" 
-
-    sim = Simulation(terrain_file, spot_urdf_file, p,
-                self_collision_enabled=False)
-    
-    sim.initialize(fix_robot_base=True) 
-
-    sim.test_FTG()
 

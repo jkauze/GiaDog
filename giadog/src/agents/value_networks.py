@@ -35,8 +35,8 @@ class TeacherValueNetwork(Network):
 
         inputs_o_t = keras.Input(
             shape=NON_PRIVILIGED_DATA_SHAPE,
-            name='non_priviliged_data')
-
+            name='non_priviliged_data'
+        )
 
         concat = keras.layers.Concatenate()([inputs_x_t, inputs_o_t])
         

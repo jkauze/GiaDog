@@ -6,15 +6,16 @@
 """
 from typing import *
 from time import time
+from uuid import uuid4
 from dataclasses import dataclass
 from training.GiadogGym import *
 from random import randint, choice, choices, uniform
 from multiprocessing import Process, Queue, JoinableQueue
 from __env__ import N_TRAJ, P_REPLAY, N_EVALUATE, N_PARTICLES, \
     P_TRANSITION, MIN_DESIRED_TRAV, MAX_DESIRED_TRAV, RANDOM_STEP_PROP, \
-    ROWS, TERRAIN_FILE, HILLS_RANGE, STEPS_RANGE, STAIRS_RANGE, LEARNING_RATE, \
+    ROWS, HILLS_RANGE, STEPS_RANGE, STAIRS_RANGE, LEARNING_RATE, \
     ACTOR_PATH, CRITIC_PATH, GAMMA, BACKTRACK_ITERS, BACKTRACK_COEFF, \
-    TRAIN_CRITIC_ITERS
+    TRAIN_CRITIC_ITERS, ACTOR_UPDATE_STEPS, CRITIC_UPDATE_STEPS
 
 RANGES = {
     'hills'  : HILLS_RANGE,
@@ -69,14 +70,87 @@ class TrajectoryGenerator(Process):
             self, 
             gym_env: TeacherEnv, 
             task_queue: JoinableQueue,
-            result_queue: Queue
+            result_queue: Queue,
+            train_method: str
         ):
         Process.__init__(self)
         self.gym_env = gym_env
         self.task_queue = task_queue
         self.result_queue = result_queue
+        self.train_method = train_method
+
+    @staticmethod
+    def gen_trajectory(
+            model,
+            gym_env: TeacherEnv,
+            p: Particle,
+            k: int,
+            m: int,
+            result_queue: Queue
+        ):
+        """
+            [TODO]
+        """
+        t = time()
+        model.load_models(ACTOR_PATH, CRITIC_PATH)
+
+        buffer_states, buffer_actions, buffer_rewards = [], [], []
+
+        # Generate terrain using C_t
+        terrain_file = f'terrains/{p.type}_{uuid4()}.txt'
+        gym_env.make_terrain(
+            terrain_file,
+            p.type,
+            rows=ROWS,
+            cols=ROWS,
+            seed=randint(0, 1e6),
+            **p.parameters
+        )
+        state = gym_env.reset(terrain_file)
+        done = False
+
+        cumulative_it_reward = 0
+        while not done:
+            # Get and apply an action.
+            action = model.get_action(state)
+            buffer_states.append(state)
+            buffer_actions.append(action)
+            state, reward, done, _ = gym_env.step(action)
+
+            # Get environment reward
+            buffer_rewards.append(reward)
+            cumulative_it_reward += float(reward)
+
+        if gym_env.meta: done = 1
+        elif gym_env.is_fallen: done = -1
+        else: done = 0
+        
+        travs = gym_env.traverability()
+        p.traverability[k * N_EVALUATE + m] = travs
+
+        # Print trajectory information
+        print(
+            f'TERRAIN: {p.type} ({p.parameters})| ' +
+            f'Done: {done} | ' +
+            'Cumulative reward: {:.4f} | '.format(cumulative_it_reward) +
+            'Iteration time: {:.4f} | '.format(time() - t) + 
+            'Traverability: {:.4f} | '.format(travs) + 
+            f'Frames: {len(gym_env.trajectory)} \n'
+        )
+
+        # Send results
+        result_queue.put((
+            p, 
+            buffer_states, 
+            buffer_actions, 
+            buffer_rewards,
+            done
+        ))
 
     def run(self):
+        """
+            [TODO]
+        """
         import tensorflow as tf
         import os
 
@@ -89,72 +163,52 @@ class TrajectoryGenerator(Process):
         from training.TRPO import TRPO 
         from agents import TeacherNetwork, TeacherValueNetwork
         
-        model = TRPO(
-            TeacherNetwork(self.gym_env.action_space, self.gym_env.observation_space),
-            TeacherValueNetwork(self.gym_env.observation_space),
-            tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
-        )
+        if self.train_method == 'TRPO':
+            model = TRPO(
+                TeacherNetwork(
+                    self.gym_env.action_space, 
+                    self.gym_env.observation_space
+                ),
+                TeacherValueNetwork(self.gym_env.observation_space),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+            )
+        elif self.train_method == 'PPO':
+            model = PPO(
+                TeacherNetwork(
+                    self.gym_env.action_space, 
+                    self.gym_env.observation_space
+                ),
+                TeacherValueNetwork(self.gym_env.observation_space),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+            )
 
         while True:
             # Get task
             p, k, m = self.task_queue.get()
-            t = time()
             model.load_models(ACTOR_PATH, CRITIC_PATH)
 
-            buffer_states, buffer_actions, buffer_rewards = [], [], []
-
-            # Generate terrain using C_t
-            self.gym_env.make_terrain(
-                p.type,
-                rows=ROWS,
-                cols=ROWS,
-                seed=randint(0, 1e6),
-                **p.parameters
-            )
-            state = self.gym_env.reset(TERRAIN_FILE)
-            done = False
-
-            cumulative_it_reward = 0
-            while not done:
-                # Get and apply an action.
-                action = model.get_action(state)
-                buffer_states.append(state)
-                buffer_actions.append(action)
-                state, reward, done, _ = self.gym_env.step(action)
-
-                # Get environment reward
-                buffer_rewards.append(reward)
-                cumulative_it_reward += float(reward)
-
-            done = self.gym_env.meta
-            travs = self.gym_env.traverability()
-            p.traverability[k * N_EVALUATE + m] = travs
-
-            # Print trajectory information
-            print(
-                f'TERRAIN: {p.type} | ' +
-                f'Done: {done} | ' +
-                'Cumulative reward: {:.4f} | '.format(cumulative_it_reward) +
-                'Iteration time: {:.4f} | '.format(time() - t) + 
-                'Traverability: {:.4f} \n'.format(travs)
-            )
+            self.gen_trajectory(model, self.gym_env, p, k, m, self.result_queue)
 
             # Send results
             self.task_queue.task_done()
-            self.result_queue.put((
-                p, 
-                buffer_states, 
-                buffer_actions, 
-                buffer_rewards
-            ))
 
 class TerrainCurriculum(object):
     """
         [TODO]
     """
-    def __init__(self, gym_envs: List[TeacherEnv]):
+    def __init__(
+            self, 
+            gym_envs: List[TeacherEnv], 
+            train_method: str,
+            _continue: bool
+        ):
+        """
+            [TODO]
+        """
         assert len(gym_envs) > 0, 'Must be one or more gym environments.'
         self.gym_envs = gym_envs
+        self.train_method = train_method
 
         hills_C_t  = [
             Particle('hills', INIT_VALUES['hills'].copy(), [0] * N_TRAJ * N_EVALUATE) 
@@ -171,22 +225,43 @@ class TerrainCurriculum(object):
         self.C_t = hills_C_t + steps_C_t + stairs_C_t
         self.C_t_history  = [[p.copy() for p in self.C_t]]
 
-        p = Process(
-            target=self.__new_model, 
-            args=(gym_envs[0].action_space, gym_envs[0].observation_space)
-        )
-        p.start()
-        p.join()
-
-        self.tasks = JoinableQueue()
         self.results = Queue()
-        self.traj_generators = [
-            TrajectoryGenerator(env, self.tasks, self.results) for env in gym_envs
-        ]
-        for generator in self.traj_generators: generator.start()
+        if len(self.gym_envs) > 1:
+            if not _continue:
+                p = Process(
+                    target=self.__new_model, 
+                    args=(
+                        gym_envs[0].action_space,
+                        gym_envs[0].observation_space,
+                        train_method
+                    )
+                )
+                p.start()
+                p.join()
+
+            self.tasks = JoinableQueue()
+            self.traj_generators = [
+                TrajectoryGenerator(
+                    env, 
+                    self.tasks, 
+                    self.results,
+                    self.train_method
+                ) for env in gym_envs
+            ]
+            for generator in self.traj_generators: generator.start()
+        elif not _continue:
+            self.__new_model(
+                gym_envs[0].action_space,
+                gym_envs[0].observation_space,
+                train_method
+            )
 
     @staticmethod
-    def __new_model(action_space: gym.Space, observation_space: gym.Space):
+    def __new_model(
+            action_space: gym.Space, 
+            observation_space: gym.Space,
+            train_method: str 
+        ):
         """
             [TODO]
         """
@@ -202,11 +277,20 @@ class TerrainCurriculum(object):
         from training.TRPO import TRPO 
         from agents import TeacherNetwork, TeacherValueNetwork
         
-        model = TRPO(
-            TeacherNetwork(action_space, observation_space),
-            TeacherValueNetwork(observation_space),
-            tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
-        )
+        if train_method == 'TRPO':
+            model = TRPO(
+                TeacherNetwork(action_space, observation_space),
+                TeacherValueNetwork(observation_space),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+            )
+        elif train_method == 'PPO':
+            model = PPO(
+                TeacherNetwork(action_space, observation_space),
+                TeacherValueNetwork(observation_space),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+            )
+
         model.save_models(ACTOR_PATH, CRITIC_PATH)
 
     def __compute_measurement_probs(self):
@@ -272,6 +356,7 @@ class TerrainCurriculum(object):
     def __update_model(
             action_space: gym.Space, 
             observation_space: gym.Space,
+            train_method: str,
             buffer_states: List[Dict[str, np.array]], 
             buffer_actions: List[np.array], 
             buffer_rewards: List[float], 
@@ -292,11 +377,19 @@ class TerrainCurriculum(object):
         from training.TRPO import TRPO 
         from agents import TeacherNetwork, TeacherValueNetwork
         
-        model = TRPO(
-            TeacherNetwork(action_space, observation_space),
-            TeacherValueNetwork(observation_space),
-            tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
-        )
+        if train_method == 'TRPO':
+            model = TRPO(
+                TeacherNetwork(action_space, observation_space),
+                TeacherValueNetwork(observation_space),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+            )
+        elif train_method == 'PPO':
+            model = PPO(
+                TeacherNetwork(action_space, observation_space),
+                TeacherValueNetwork(observation_space),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+                tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+            )
         model.load_models(ACTOR_PATH, CRITIC_PATH)
 
         # Get critic value
@@ -311,14 +404,23 @@ class TerrainCurriculum(object):
         discounted_reward.reverse()
 
         # Update actor and critic parameters
-        model.update(
-            buffer_states, 
-            buffer_actions, 
-            np.array(discounted_reward)[:, np.newaxis], 
-            TRAIN_CRITIC_ITERS, 
-            BACKTRACK_ITERS, 
-            BACKTRACK_COEFF
-        )
+        if train_method == 'TRPO':
+            model.update(
+                buffer_states, 
+                buffer_actions, 
+                np.array(discounted_reward)[:, np.newaxis], 
+                TRAIN_CRITIC_ITERS, 
+                BACKTRACK_ITERS, 
+                BACKTRACK_COEFF
+            )
+        elif train_method == 'PPO':
+            model.update(
+                buffer_states, 
+                buffer_actions, 
+                np.array(discounted_reward)[:, np.newaxis], 
+                ACTOR_UPDATE_STEPS,
+                CRITIC_UPDATE_STEPS
+            )
 
         # Save model
         model.save_models(ACTOR_PATH, CRITIC_PATH)
@@ -327,15 +429,58 @@ class TerrainCurriculum(object):
         """
             [TODO]
         """
+        if len(self.gym_envs) == 1:
+            import tensorflow as tf
+            import os
+
+            gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+            for device in gpu_devices:
+                tf.config.experimental.set_memory_growth(device, True)
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+
+            from training.PPO import PPO
+            from training.TRPO import TRPO 
+            from agents import TeacherNetwork, TeacherValueNetwork
+            
+            if self.train_method == 'TRPO':
+                model = TRPO(
+                    TeacherNetwork(
+                        self.gym_envs[0].action_space, 
+                        self.gym_envs[0].observation_space
+                    ),
+                    TeacherValueNetwork(self.gym_envs[0].observation_space),
+                    tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+                )
+            elif self.train_method == 'PPO':
+                model = PPO(
+                    TeacherNetwork(
+                        self.gym_envs[0].action_space, 
+                        self.gym_envs[0].observation_space
+                    ),
+                    TeacherValueNetwork(self.gym_envs[0].observation_space),
+                    tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+                    tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+                )
+
         while True:
             for k in range(N_EVALUATE):
                 # We add the tasks for the trajectory generators
                 for p in self.C_t:
                     for m in range(N_TRAJ):
-                        self.tasks.put((p, k, m))
+                        if len(self.gym_envs) > 1: 
+                            self.tasks.put((p, k, m))
+                        else:
+                            TrajectoryGenerator.gen_trajectory(
+                                model,
+                                self.gym_envs[0],
+                                p,
+                                k,
+                                m,
+                                self.results
+                            )
 
                 # Wait for all of the tasks to finish
-                self.tasks.join()
+                if len(self.gym_envs) > 1: self.tasks.join()
                 
                 # Get data from all trajectories
                 N = len(self.C_t)
@@ -351,19 +496,31 @@ class TerrainCurriculum(object):
 
                 # Update policy for every iteration
                 for i in range(N * N_TRAJ):
-                    p = Process(
-                        target=self.__update_model,
-                        args=(
+                    if len(self.gym_envs) > 1:
+                        p = Process(
+                            target=self.__update_model,
+                            args=(
+                                self.gym_envs[0].action_space,
+                                self.gym_envs[0].observation_space,
+                                self.train_method,
+                                buffers_states[i],
+                                buffers_actions[i],
+                                buffers_rewards[i],
+                                buffer_done[i]
+                            )
+                        )
+                        p.start()
+                        p.join()
+                    else:
+                        self.__update_model(
                             self.gym_envs[0].action_space,
                             self.gym_envs[0].observation_space,
+                            self.train_method,
                             buffers_states[i],
                             buffers_actions[i],
                             buffers_rewards[i],
                             buffer_done[i]
                         )
-                    )
-                    p.start()
-                    p.join()
             
             # Compute measurement probabilities
             self.__compute_measurement_probs()
