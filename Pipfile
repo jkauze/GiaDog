@@ -12,6 +12,7 @@ perlin-noise = "*"
 pybullet = "*"
 tensorflow = "*"
 keras-tcn = "*"
+inputs = "*"
 
 [dev-packages]
 
