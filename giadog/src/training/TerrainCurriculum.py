@@ -126,7 +126,7 @@ class TrajectoryGenerator(Process):
         else: done = 0
         
         travs = gym_env.traverability()
-        p.traverability[k * N_EVALUATE + m] = travs
+        p.traverability[k * N_TRAJ + m] = travs
 
         # Print trajectory information
         print(
@@ -201,7 +201,8 @@ class TerrainCurriculum(object):
             self, 
             gym_envs: List[TeacherEnv], 
             train_method: str,
-            _continue: bool
+            _continue: bool,
+            testing: bool=False
         ):
         """
             [TODO]
@@ -209,6 +210,7 @@ class TerrainCurriculum(object):
         assert len(gym_envs) > 0, 'Must be one or more gym environments.'
         self.gym_envs = gym_envs
         self.train_method = train_method
+        self.testing = testing
 
         hills_C_t  = [
             Particle('hills', INIT_VALUES['hills'].copy(), [0] * N_TRAJ * N_EVALUATE) 
@@ -226,7 +228,9 @@ class TerrainCurriculum(object):
         self.C_t_history  = [[p.copy() for p in self.C_t]]
 
         self.results = Queue()
-        if len(self.gym_envs) > 1:
+        if self.testing: 
+            pass
+        elif len(self.gym_envs) > 1:
             if not _continue:
                 p = Process(
                     target=self.__new_model, 
@@ -348,8 +352,11 @@ class TerrainCurriculum(object):
             step = (RANGES[p.type][attr][1] - RANGES[p.type][attr][0]) * RANDOM_STEP_PROP
 
             p.parameters[attr] += uniform(-step, step)
-            p.parameters[attr] = max(RANGES[p.type][attr][0], p.parameters[attr])
-            p.parameters[attr] = min(RANGES[p.type][attr][1], p.parameters[attr])
+            p.parameters[attr] = np.clip(
+                p.parameters[attr],
+                RANGES[p.type][attr][0],
+                RANGES[p.type][attr][1]
+            )
         return p
 
     @staticmethod
@@ -425,11 +432,20 @@ class TerrainCurriculum(object):
         # Save model
         model.save_models(ACTOR_PATH, CRITIC_PATH)
 
-    def train(self):
+    def train(
+            self, 
+            artificial_trajectory_gen: Callable=None,
+            terrain_to_show: str='hills',
+            epochs_to_show: int=50
+        ):
         """
             [TODO]
         """
-        if len(self.gym_envs) == 1:
+        if self.testing:
+            generate = artificial_trajectory_gen
+        elif len(self.gym_envs) > 1:
+            generate = lambda p, k, m : self.tasks.put((p, k, m))
+        else:
             import tensorflow as tf
             import os
 
@@ -462,22 +478,25 @@ class TerrainCurriculum(object):
                     tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
                 )
 
+            generate = lambda p, k, m : TrajectoryGenerator.gen_trajectory(
+                model,
+                self.gym_envs[0],
+                p,
+                k,
+                m,
+                self.results
+            )
+
+        epoch = 0
         while True:
             for k in range(N_EVALUATE):
                 # We add the tasks for the trajectory generators
                 for p in self.C_t:
                     for m in range(N_TRAJ):
-                        if len(self.gym_envs) > 1: 
-                            self.tasks.put((p, k, m))
-                        else:
-                            TrajectoryGenerator.gen_trajectory(
-                                model,
-                                self.gym_envs[0],
-                                p,
-                                k,
-                                m,
-                                self.results
-                            )
+                        generate(p, k, m)
+
+                # If we are in test mode, no model should be updated
+                if self.testing: continue
 
                 # Wait for all of the tasks to finish
                 if len(self.gym_envs) > 1: self.tasks.join()
@@ -547,3 +566,39 @@ class TerrainCurriculum(object):
                 # By ptransition probability, move C_T to an adjacent value in C.
                 elif P_REPLAY < prob <= P_REPLAY + P_TRANSITION:
                     self.C_t[i] = self.__random_walk(self.C_t[i])
+
+            # If we are in test mode, we show the terrain with the best fitness
+            if self.testing:
+                best_p = None 
+                best_fitness = -1 
+                for p in [p for p in self.C_t if p.type == terrain_to_show]:
+                    if p.weight > best_fitness:
+                        best_p = p 
+                        best_fitness = p.weight
+                
+                if self.gym_envs[0].sim.gui and epoch % epochs_to_show == 0:
+                    terrain_file = f'terrains/{best_p.type}_{uuid4()}.txt'
+                    self.gym_envs[0].make_terrain(
+                        terrain_file,
+                        best_p.type,
+                        rows=ROWS,
+                        cols=ROWS,
+                        seed=randint(0, 1e6),
+                        **best_p.parameters
+                    )
+                    self.gym_envs[0].reset(terrain_file)
+
+                parameters = {
+                    attr: '{:.4f}'.format(best_p.parameters[attr]) \
+                    for attr in best_p.parameters
+                }
+                T = len(best_p.traverability)
+                traverability = '{:.4f}'.format(sum(best_p.traverability) / T)
+                print(
+                    f'\033[1;36m[i]\033[0m Epoch: {epoch} |' +\
+                    f'Best parameters: {parameters} | ' +\
+                    f'Traverability : {traverability} | '
+                    'Weight: {:.4f}'.format(best_p.weight)
+                )
+
+            epoch += 1

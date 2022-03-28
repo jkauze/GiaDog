@@ -6,14 +6,14 @@
     terrain.
 """
 import numpy as np
+import plotly.graph_objects as go
 from typing import *
-from random import uniform
-import matplotlib.pyplot as plt
+from random import uniform, randint
 from perlin_noise import PerlinNoise
-from __env__ import SCALE, STEPS_FREQUENCY, STEPS_NOISE, ZONE_STAIRS_WIDTH
+from __env__ import SCALE, STEPS_FREQUENCY, STEPS_NOISE, ZONE_STAIRS_WIDTH, MESH_SCALE
 
 
-def __terrain(rows: int, cols: int) -> np.ndarray:
+def __terrain(rows: int, cols: int) -> np.array:
     """
         Generate a new flat terrain.
 
@@ -27,18 +27,18 @@ def __terrain(rows: int, cols: int) -> np.ndarray:
 
         Return:
         -------
-            numpy.ndarray, shape (rows, cols)
+            numpy.array, shape (rows, cols)
                 Flat terrain of dimensions rows x cols.
     """
     return np.zeros((rows, cols))
 
-def __perlin(terrain: np.ndarray, amplitude: float, octaves: float, seed: int):
+def __perlin(terrain: np.array, amplitude: float, octaves: float, seed: int):
     """
         Apply the Perlin noise on a terrain.
 
         Parameters:
         -----------
-            terrain: numpy.ndarray, shape (M, N)
+            terrain: numpy.array, shape (M, N)
                 Terrain to modify.
 
             amplitude: float
@@ -63,7 +63,7 @@ def __perlin(terrain: np.ndarray, amplitude: float, octaves: float, seed: int):
     terrain += amplitude * (noise - np.min(noise))
 
 def __step(
-        terrain: np.ndarray, 
+        terrain: np.array, 
         row: int, 
         col: int, 
         width: int, 
@@ -75,7 +75,7 @@ def __step(
 
         Parameters:
         -----------
-            terrain: numpy.ndarray, shape (M, N)
+            terrain: numpy.array, shape (M, N)
                 Terrain to modify.
 
             row: int
@@ -99,7 +99,7 @@ def __step(
             terrain[i][j] += height
 
 def __stair(
-        terrain: np.ndarray, 
+        terrain: np.array, 
         row: int, 
         col: int, 
         orientation: str, 
@@ -113,7 +113,7 @@ def __stair(
 
         Parameters:
         -----------
-            terrain: numpy.ndarray, shape (M, N)
+            terrain: numpy.array, shape (M, N)
                 Terrain to modify.
 
             row: int
@@ -180,13 +180,13 @@ def __stair(
     else:
         raise Exception(f'Unexpected orientation "\033[1;3m{orientation}\033[0m"')
 
-def __goal(terrain: np.ndarray, row: int, col: int, height: float):
+def __goal(terrain: np.array, row: int, col: int, height: float):
     """
         Place a vertical rod on the terrain.
 
         Parameters:
         -----------
-            terrain: np.ndarray, shape (M, N)  
+            terrain: np.array, shape (M, N)  
                 Terrain to modify.
 
             row: int
@@ -210,7 +210,19 @@ def __goal(terrain: np.ndarray, row: int, col: int, height: float):
         if 0 <= x < rows and 0 <= y < cols:
             terrain[x][y] = base + height
 
-def set_goal(terrain: np.ndarray, height: float) -> Tuple[int, int]:
+def __add_giadog_cube(terrain: np.array, x: int, y: int):
+    """
+        [TODO]
+    """
+    width = int(0.3 / MESH_SCALE[0])
+    length = int(0.3 / MESH_SCALE[1])
+    height = 0.3 / MESH_SCALE[2]
+    height += max(max(pos for pos in row) for row in terrain[x:x+width,y:y+length])
+    for i in range(x, x + width):
+        for j in range(y, y + length):
+            terrain[i][j] = height
+
+def set_goal(terrain: np.array, height: float) -> Tuple[int, int]:
     """
         Place a vertical rod randomly at some point on the circumference 
         inscribed on the terrain.
@@ -235,7 +247,7 @@ def hills(
         frequency: float, 
         amplitude: float, 
         seed: int
-    ) -> np.ndarray:
+    ) -> np.array:
     """
         Generates a rugged hilly terrain.
 
@@ -253,17 +265,18 @@ def hills(
 
             frequency: float
                 How often the hills appear. It must be positive, preferably in 
-                the range [0.2, 1].
+                the range [0.2, 2.5].
 
             amplitude: float
-                Maximum height of the hills.
+                Maximum height of the hills. It should preferably be in the 
+                range [0.2, 2.5].
                 
             seed: int 
                 Specific seed you want to initialize the random generator with.
 
         Return:
         -------
-            np.ndarray
+            np.array
                 Resulting terrain.
     """
     # Generate the terrain
@@ -283,7 +296,7 @@ def steps(
         width: float, 
         height: float, 
         seed: int
-    ) -> np.ndarray:
+    ) -> np.array:
     """
         Generate a cubes terrain. 
 
@@ -296,17 +309,19 @@ def steps(
                 Number of columns of the terrain.
 
             width: float
-                Width and length of the cubes.
+                Width and length of the cubes. Preferably in the range 
+                [0.3, 0.8].
 
             height: float
-                Maximum height of the cubes.
+                Maximum height of the cubes. Preferably in the range 
+                [0.05, 0.4].
                 
             seed: int 
                 Specific seed you want to initialize the random generator with.
 
         Return:
         -------
-            np.ndarray
+            np.array
                 Resulting terrain.
     """
     width = int(width / SCALE)
@@ -343,7 +358,7 @@ def stairs(
         width: float, 
         height: float,
         seed: int=0
-    ) -> np.ndarray:
+    ) -> np.array:
     """
         Generate a terrain of stairs.
 
@@ -356,17 +371,17 @@ def stairs(
                 Number of columns of the terrain.
 
             width: float
-                Steps width.
+                Steps width. Preferably in the range [0.3, 0.8].
 
             height: float
-                Steps height.
+                Steps height. Preferably in the range [0.02, 0.1].
 
             seed: int
                 Dummy argument.
 
         Return:
         -------
-            np.ndarray
+            np.array
                 Resulting terrain.
     """
     terrain = __terrain(rows, cols)
@@ -399,13 +414,13 @@ def stairs(
 
     return terrain
 
-def save_terrain(terrain: np.ndarray, filename: str):
+def save_terrain(terrain: np.array, filename: str):
     """
         Stores the terrain in a text file.
 
         Parameters:
         -----------
-        terrain: numpy.ndarray, shape (M, N)
+        terrain: numpy.array, shape (M, N)
             Terrain to store.
         filename: str
             Name of the file where the terrain will be stored.
@@ -422,9 +437,14 @@ def save_terrain(terrain: np.ndarray, filename: str):
     with open(filename, 'w') as f:
         f.write(terrain_str)
 
-def plot(terrain: np.ndarray):
+def plot_terrain(terrain: np.array):
     """ Generate a plot of the terrain. """
-    plt.imshow(terrain, cmap='gray')
-    plt.show()
+    __add_giadog_cube(terrain, terrain.shape[0] // 2, terrain.shape[1] // 2)
 
+    layout = go.Layout(scene=dict(aspectmode='data'))
+    x = np.linspace(0, terrain.shape[0] * MESH_SCALE[0], terrain.shape[0])
+    y = np.linspace(0, terrain.shape[1] * MESH_SCALE[1], terrain.shape[1])
+    x, y = np.meshgrid(x, y)
+    fig = go.Figure(data=[go.Surface(x=x, y=y, z=terrain)], layout=layout)
 
+    fig.show()
