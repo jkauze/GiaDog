@@ -619,7 +619,7 @@ class Simulation(object):
         self.update_is_fallen()
     
 
-    def draw_vector(r_o, r_f, r = 0, g= 0, b = 1):
+    def draw_vector(self, r_o, r_f, r = 0, g= 0, b = 1):
         """
         Draw a vector between two points in world coordinates.
 
@@ -634,28 +634,31 @@ class Simulation(object):
         """
         # We get the vecor direction
         vector = r_f - r_o
+        
         # We get the vector length
         vector_length = np.linalg.norm(vector)
         # We normalize the vector
         vector = vector / vector_length
-
-        # We get the pitch and yaw angles
-        pitch = np.arcsin(vector[2])
+        
+        # We get the pitch and yaw angles from the vector
+        pitch = np.arcsin(-vector[2])
         yaw = np.arctan2(vector[1], vector[0])
         
-
-        meshScale=[vector_length/150,.1,.1]
+        thickness = vector_length/400
+        # The model of the vector mesures 170 units in the x axis (that explains
+        # the scaling for the x axis)
+        meshScale=[vector_length/170,thickness,thickness]
         visualShapeId = p.createVisualShape(shapeType=p.GEOM_MESH,
                     fileName="giadog/assets/vector.obj", rgbaColor=[r,g,b,1], 
                     specularColor=[0.4,.4,0], visualFramePosition=[0,0,0],
                     meshScale=meshScale)
-        
+
                                 
         orientation = p.getQuaternionFromEuler([0,pitch,yaw])
-        vector = p.createMultiBody(baseMass=1,
+        vector = p.createMultiBody(baseMass=0,
                                 baseOrientation=orientation, 
                                 baseVisualShapeIndex = visualShapeId, 
-                                basePosition = [0,0,1], 
+                                basePosition = r_o, 
                                 useMaximalCoordinates=False)
         
         return vector
