@@ -1,0 +1,39 @@
+import os, sys
+sys.path.append(os.path.dirname(os.path.realpath(f'{__file__}/..')))
+
+import pathlib
+import argparse
+from src.__env__ import TERRAIN_FILE
+from src.simulation.Simulation import *
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Test terrain curriculum.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    parser.add_argument(
+        '-u', '--spot-urdf',
+        type=str,
+        default=str(pathlib.Path(__file__).parent.parent.resolve()) +\
+            '/mini_ros/urdf/spot.urdf',
+        help='Path to the URDF file of the quadruped robot.',
+        metavar='PATH'
+    )
+    parser.add_argument(
+        '-s', '---sensor',
+        choices=['position-orientation', 'PPO'],
+        default='position-orientation',
+        help='Sensor to test.',
+        metavar='SENSOR'
+    )
+
+    args = parser.parse_args()
+
+    sim = Simulation(args.spot_urdf, gui=True)
+    sim.reset(TERRAIN_FILE)
+    
+    if args.sensor == 'position-orientation': 
+        test_function = sim.test_position_orientation
+
+    sim.test(test_function)

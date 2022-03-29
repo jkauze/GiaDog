@@ -618,7 +618,32 @@ class Simulation(object):
         self.update_transf_matrices()
         self.update_is_fallen()
 
-    # =========================== DEBUGGING FUNCTIONS =========================== #
+    # ========================= TEST FUNCTIONS ========================= #
+    def test_position_orientation(self):
+        """
+            [TODO]
+        """
+        # Position
+        r_o = self.position
+        # Orientation
+        _, pitch, yaw = self.orientation
+        x = np.cos(yaw) * np.cos(pitch)
+        y = np.sin(yaw) * np.cos(pitch)
+        z = np.sin(pitch)
+        r_f = r_o + np.array([x, y, z])
+
+        self.trace_line(r_o, r_f, 0.1)
+
+    def test(self, test_function: Callable):
+        """
+            [TODO]
+        """
+        while True:
+            self.step()
+            self.update_sensor_output()
+            test_function()
+
+    # ========================= DEBUGGING FUNCTIONS ========================= #
     def set_toes_friction_coefficients(self, friction_coefficient: float):
         """
             Changes the friction coeficient of the quadruped toes. It sets the 
