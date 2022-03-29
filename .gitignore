@@ -160,3 +160,4 @@ models/*
 terrains/*
 ~terrains/.gitkeep
 .vscode/
+temp-plot.html

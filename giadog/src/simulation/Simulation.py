@@ -43,6 +43,7 @@ class Simulation(object):
                     Default: False
         """
         self.giadog_urdf_file = giadog_urdf_file
+        self.gui = gui
         self.p = bc.BulletClient(connection_mode=p.GUI if gui else p.DIRECT)
         self.self_collision_enabled = self_collision_enabled
         self.__reset_state()
