@@ -30,6 +30,7 @@ def main():
     #the visual shape and collision shape can be re-used by all createMultiBody instances (instancing)
     
     # Create a visual shape of a cube
+    """
     meshScale=[1,1,1]
     visualShapeId = p.createVisualShape(shapeType=p.GEOM_MESH,
                     fileName="giadog/assets/arrow.obj", rgbaColor=[0.5,1,1,1], 
@@ -44,12 +45,14 @@ def main():
                                 baseVisualShapeIndex = visualShapeId, 
                                 basePosition = [0,0,1], 
                                 useMaximalCoordinates=False)
-    cam_dist = 15
+    """
+    cam_dist = 2
     cam_yaw = 0
     cam_pitch = -30
+
+    quadruped = p.loadURDF('giadog/mini_ros/urdf/spot.urdf', [0, 0,  0.3])
     
-    
-    speed = 0.5
+    speed = 0.05
     camera_speed = 1.5
     while True:
         x = joy.LeftJoystickX
@@ -61,8 +64,8 @@ def main():
         
         # Print the camera yaw with 2 decimals
         theta = cam_yaw*np.pi/180 +  np.pi/2 
-        orientation_b = p.getQuaternionFromEuler([0,np.pi/2,theta])
-        position, _ = p.getBasePositionAndOrientation(arrow)
+        orientation_b = p.getQuaternionFromEuler([0,0,theta])
+        position, _ = p.getBasePositionAndOrientation(quadruped)
 
         
         
@@ -70,7 +73,7 @@ def main():
         new_y = position[1] + y * speed*np.sin(theta) - x * speed*np.cos(theta)
         
         position = [new_x, new_y, position[2]]
-        p.resetBasePositionAndOrientation(arrow,position,orientation_b)
+        p.resetBasePositionAndOrientation(quadruped,position,orientation_b)
         p.resetDebugVisualizerCamera(cam_dist, cam_yaw,
                                 cam_pitch, position)
         p.stepSimulation()
