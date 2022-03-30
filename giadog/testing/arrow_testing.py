@@ -40,7 +40,7 @@ if __name__ == '__main__':
     y = np.sin(yaw)*np.cos(pitch)
     z = np.sin(pitch)
     r_f = r_o + np.array([x, y, z])
-    vector = sim.draw_vector(r_o, r_f)
+    vector = sim.create_vector(r_o, r_f)
     dt = 1/240
     while True:
         sim.update_position_orientation()

@@ -5,7 +5,6 @@ import pathlib
 import argparse
 from uuid import uuid4
 from random import randint
-from src.__env__ import TERRAIN_FILE
 from src.simulation.Simulation import *
 from src.simulation.terrain_gen import *
 
@@ -63,7 +62,7 @@ if __name__ == '__main__':
                 sim.p.readUserDebugParameter(amp_id),
                 randint(0, 1e6)
             )
-            file = f'hills_{uuid4()}.txt'
+            file = f'./terrains/hills_{uuid4()}.txt'
             save_terrain(terrain, file)
             sim.reset(file)
 
@@ -79,7 +78,7 @@ if __name__ == '__main__':
                 sim.p.readUserDebugParameter(steps_height_id),
                 randint(0, 1e6)
             )
-            file = f'steps_{uuid4()}.txt'
+            file = f'./terrains/steps_{uuid4()}.txt'
             save_terrain(terrain, file)
             sim.reset(file)
 
@@ -94,7 +93,7 @@ if __name__ == '__main__':
                 sim.p.readUserDebugParameter(stairs_width_id),
                 sim.p.readUserDebugParameter(stairs_height_id)
             )
-            file = f'stairs_{uuid4()}.txt'
+            file = f'./terrains/stairs_{uuid4()}.txt'
             save_terrain(terrain, file)
             sim.reset(file)
             

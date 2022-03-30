@@ -239,7 +239,6 @@ class Simulation(object):
                     Force vector to be applied to the base of the robot.
                     Expressed in the world frame.
         """
-
         self.p.applyExternalForce(
             self.quadruped, 
             -1, 
@@ -273,7 +272,13 @@ class Simulation(object):
 
         self.external_force = force_norm * force_module
 
-    def reset(self, terrain_file: str, x_o: float=0.0, y_o: float=0.0):
+    def reset(
+            self, 
+            terrain_file: str, 
+            x_o: float=0.0, 
+            y_o: float=0.0,
+            fix_robot_base: bool=False
+        ):
         """
             Reset simulation.
 
@@ -305,7 +310,7 @@ class Simulation(object):
 
         self.p.resetSimulation()
         self.__reset_state()
-        self.__initialize(x_o, y_o)
+        self.__initialize(x_o, y_o, fix_robot_base)
 
     def actuate_joints(self, joint_target_positions: List[float]):
         """
@@ -617,72 +622,188 @@ class Simulation(object):
         self.update_base_rpy()
         self.update_transf_matrices()
         self.update_is_fallen()
-    
 
-    def draw_vector(self, r_o, r_f, r = 0, g= 0, b = 1):
+    # ========================= TESTING FUNCTIONS ========================= #
+    def __create_vector(
+            self, 
+            r_o: np.array, 
+            r_f: np.array, 
+            length: int=1,
+            r: int=0, 
+            g: int=0, 
+            b: int=1
+        ) -> int:
         """
-        Draw a vector between two points in world coordinates.
+            Create a vector between two points in world coordinates.
 
-        Arguments:
-        ----------
+            Arguments:
+            ----------
+                r_o: numpy.array, shape (3,)
+                    Origin of the vector
 
-        r_o: (3,) numpy array :-> origin of the vector
-        r_f: (3,) numpy array :-> final point of the vector
-        r: float :-> red color component
-        g: float :-> green color component
-        b: float :-> blue color component
+                r_f: numpy.array, shape (3,)
+                    Final point of the vector
+
+                r: float, optional
+                    Red color component.
+                    Default: 0
+
+                g: float, optional
+                    Green color component.
+                    Default: 0
+
+                b: float, optional
+                    Blue color component.
+                    Default: 1
+
+            Return:
+            -------
+                Vector id.
         """
-        # We get the vecor direction
+        # We get the vector direction
         vector = r_f - r_o
         
         # We get the vector length
         vector_length = np.linalg.norm(vector)
+        if vector_length == 0: return -1 
+
         # We normalize the vector
-        vector = vector / vector_length
+        vector = length * vector / vector_length
         
         # We get the pitch and yaw angles from the vector
         pitch = np.arcsin(-vector[2])
         yaw = np.arctan2(vector[1], vector[0])
         
-        thickness = vector_length/400
+        thickness = length/400
         # The model of the vector mesures 170 units in the x axis (that explains
         # the scaling for the x axis)
-        meshScale=[vector_length/170,thickness,thickness]
-        visualShapeId = p.createVisualShape(shapeType=p.GEOM_MESH,
-                    fileName="giadog/assets/vector.obj", rgbaColor=[r,g,b,1], 
-                    specularColor=[0.4,.4,0], visualFramePosition=[0,0,0],
-                    meshScale=meshScale)
+        meshScale=[length/170,thickness,thickness]
+        visualShapeId = p.createVisualShape(
+            shapeType=p.GEOM_MESH,
+            fileName="giadog/assets/vector.obj", rgbaColor=[r,g,b,1], 
+            specularColor=[0.4,.4,0], visualFramePosition=[0,0,0],
+            meshScale=meshScale
+        )
 
-                                
-        orientation = p.getQuaternionFromEuler([0,pitch,yaw])
-        vector = p.createMultiBody(baseMass=0,
-                                baseOrientation=orientation, 
-                                baseVisualShapeIndex = visualShapeId, 
-                                basePosition = r_o, 
-                                useMaximalCoordinates=False)
+        orientation = p.getQuaternionFromEuler([0, pitch, yaw])
+        vector = p.createMultiBody(
+            baseMass=0,
+            baseOrientation=orientation, 
+            baseVisualShapeIndex = visualShapeId, 
+            basePosition = r_o, 
+            useMaximalCoordinates=False
+        )
         
         return vector
 
-    # ========================= TEST FUNCTIONS ========================= #
-    def test_position_orientation(self):
+    def __update_vector(self, vector_id: int, r_o: np.array, r_f: np.array):
+        """
+            Update a vector.
+
+            Arguments:
+            ----------
+                vector_id: int
+                    Vector ID.
+
+                r_o: numpy.array, shape (3,)
+                    Origin of the vector.
+
+                r_f: numpy.array, shape (3,)
+                    Final point of the vector.
+
+            Return:
+            -------
+                Vector id.
+        """
+        # We get the vector direction
+        vector = r_f - r_o
+
+        # Don't draw zero vectors
+        if np.linalg.norm(vector) == 0: return
+        
+        # We get the pitch and yaw angles from the vector
+        pitch = np.arcsin(-vector[2])
+        yaw = np.arctan2(vector[1], vector[0])
+
+        orientation = self.p.getQuaternionFromEuler([0, pitch, yaw])
+        self.p.resetBasePositionAndOrientation(
+            vector_id,
+            r_o,
+            orientation
+        )
+
+    def test_position_orientation(self, first_exec: bool=False):
         """
             [TODO]
         """
-        # Position
         r_o = self.position
+
         # Orientation
         _, pitch, yaw = self.orientation
         x = np.cos(yaw) * np.cos(pitch)
         y = np.sin(yaw) * np.cos(pitch)
-        z = np.sin(pitch)
+        z = -np.sin(pitch)
         r_f = r_o + np.array([x, y, z])
 
-        self.trace_line(r_o, r_f, 0.1)
+        if first_exec: self.vector_id = self.__create_vector(r_o, r_f)
+        else: self.__update_vector(self.vector_id, r_o, r_f)
+
+    def test_base_velocity(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec: 
+            self.initial_pos = self.position
+            self.initial_orientation = self.orientation
+
+            # Force parameters
+            self.F_x_id = self.p.addUserDebugParameter('F_x', -10, 10, 0)
+            self.F_y_id = self.p.addUserDebugParameter('F_y', -10, 10, 0)
+
+            # Rese state
+            self.reset_id = self.p.addUserDebugParameter('Reset', 1, 0, 0)
+            self.reset_count = 0
+        else: 
+            self.p.removeBody(self.linear_vel_id)
+
+        # Create vectors
+        self.linear_vel_id = self.__create_vector(
+            self.position, 
+            self.position + self.linear_vel,
+            np.linalg.norm(self.linear_vel) / 5,
+            *(1, 0, 0)
+        )
+
+        # Apply forces
+        self.__apply_force([
+            1000 * self.p.readUserDebugParameter(self.F_x_id),
+            1000 * self.p.readUserDebugParameter(self.F_y_id),
+            0
+        ])
+
+        # Reset position
+        if self.reset_count == self.p.readUserDebugParameter(self.reset_id):
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                [self.position[0], self.position[1], self.initial_pos[2]],
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+        else:
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                self.initial_pos,
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
 
     def test(self, test_function: Callable):
         """
             [TODO]
         """
+        self.step()
+        self.update_sensor_output()
+        test_function(True)
+
         while True:
             self.step()
             self.update_sensor_output()

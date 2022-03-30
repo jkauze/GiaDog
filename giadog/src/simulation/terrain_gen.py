@@ -13,7 +13,7 @@ from perlin_noise import PerlinNoise
 from __env__ import SCALE, STEPS_FREQUENCY, STEPS_NOISE, ZONE_STAIRS_WIDTH, MESH_SCALE
 
 
-def __terrain(rows: int, cols: int) -> np.array:
+def terrain(rows: int, cols: int) -> np.array:
     """
         Generate a new flat terrain.
 
@@ -32,7 +32,7 @@ def __terrain(rows: int, cols: int) -> np.array:
     """
     return np.zeros((rows, cols))
 
-def __perlin(terrain: np.array, amplitude: float, octaves: float, seed: int):
+def perlin(terrain: np.array, amplitude: float, octaves: float, seed: int):
     """
         Apply the Perlin noise on a terrain.
 
@@ -62,7 +62,7 @@ def __perlin(terrain: np.array, amplitude: float, octaves: float, seed: int):
     # Apply the noise to the terrain.
     terrain += amplitude * (noise - np.min(noise))
 
-def __step(
+def step(
         terrain: np.array, 
         row: int, 
         col: int, 
@@ -98,7 +98,7 @@ def __step(
         for j in range(col, min(cols, col + lenght)):
             terrain[i][j] += height
 
-def __stair(
+def stair(
         terrain: np.array, 
         row: int, 
         col: int, 
@@ -139,7 +139,7 @@ def __stair(
     """
     if orientation == 'E':
         for i in range(n): 
-            __step(
+            step(
                 terrain, 
                 row, 
                 col + i * length, 
@@ -149,7 +149,7 @@ def __stair(
             )
     elif orientation == 'S':
         for i in range(n): 
-            __step(
+            step(
                 terrain, 
                 row + i * width, 
                 col,
@@ -159,7 +159,7 @@ def __stair(
                 )
     elif orientation == 'W':
         for i in range(n):
-            __step(
+            step(
                 terrain, 
                 row, 
                 col - (i + 1) * length, 
@@ -169,7 +169,7 @@ def __stair(
             )
     elif orientation == 'N':
         for i in range(n):
-            __step(
+            step(
                 terrain, 
                 row - (i + 1)* width, 
                 col, 
@@ -180,7 +180,7 @@ def __stair(
     else:
         raise Exception(f'Unexpected orientation "\033[1;3m{orientation}\033[0m"')
 
-def __goal(terrain: np.array, row: int, col: int, height: float):
+def goal(terrain: np.array, row: int, col: int, height: float):
     """
         Place a vertical rod on the terrain.
 
@@ -210,7 +210,7 @@ def __goal(terrain: np.array, row: int, col: int, height: float):
         if 0 <= x < rows and 0 <= y < cols:
             terrain[x][y] = base + height
 
-def __add_giadog_cube(terrain: np.array, x: int, y: int):
+def add_giadog_cube(terrain: np.array, x: int, y: int):
     """
         [TODO]
     """
@@ -236,7 +236,7 @@ def set_goal(terrain: np.array, height: float) -> Tuple[int, int]:
     col = int(radio * (1 + np.sin(angle)))
 
     # Set the goal
-    __goal(terrain, row, col, height)
+    goal(terrain, row, col, height)
 
     return (row, col)
 
@@ -280,8 +280,8 @@ def hills(
                 Resulting terrain.
     """
     # Generate the terrain
-    terrain = __terrain(rows, cols)
-    __perlin(terrain, amplitude, frequency, seed)
+    terrain = terrain(rows, cols)
+    perlin(terrain, amplitude, frequency, seed)
 
     # Add the roughness
     for i in range(rows):
@@ -327,7 +327,7 @@ def steps(
     width = int(width / SCALE)
 
     # Generate the terrain
-    terrain = __terrain(rows, cols)
+    terrain = terrain(rows, cols)
     p_noise = PerlinNoise(octaves=STEPS_FREQUENCY, seed=seed)
 
     # Calculate the Perlin noise
@@ -341,7 +341,7 @@ def steps(
     min_noise = np.min(noise)
     for i in range(0, rows, width):
         for j in range(0, cols, width):
-            __step(
+            step(
                 terrain, 
                 i, 
                 j, 
@@ -384,7 +384,7 @@ def stairs(
             np.array
                 Resulting terrain.
     """
-    terrain = __terrain(rows, cols)
+    terrain = terrain(rows, cols)
     width = int(width / SCALE)
 
     # Space occupied by the central area
@@ -404,13 +404,13 @@ def stairs(
     middle_height = (n - 1) * height
 
     # Generate the stairs
-    __stair(terrain, 0, ZONE_STAIRS_WIDTH, 'E', rows, width, height, n)
-    __stair(terrain, 0, middle_col + middle_width, 'E', rows, width, height, n)
+    stair(terrain, 0, ZONE_STAIRS_WIDTH, 'E', rows, width, height, n)
+    stair(terrain, 0, middle_col + middle_width, 'E', rows, width, height, n)
 
     # Generate the central zone
-    __step(terrain, 0, middle_col, rows, cols, middle_height)
+    step(terrain, 0, middle_col, rows, cols, middle_height)
     # Generate the final zone
-    __step(terrain, 0, cols - ZONE_STAIRS_WIDTH, rows, cols, (n - 1) * height)
+    step(terrain, 0, cols - ZONE_STAIRS_WIDTH, rows, cols, (n - 1) * height)
 
     return terrain
 
@@ -439,7 +439,7 @@ def save_terrain(terrain: np.array, filename: str):
 
 def plot_terrain(terrain: np.array):
     """ Generate a plot of the terrain. """
-    __add_giadog_cube(terrain, terrain.shape[0] // 2, terrain.shape[1] // 2)
+    add_giadog_cube(terrain, terrain.shape[0] // 2, terrain.shape[1] // 2)
 
     layout = go.Layout(scene=dict(aspectmode='data'))
     x = np.linspace(0, terrain.shape[0] * MESH_SCALE[0], terrain.shape[0])
