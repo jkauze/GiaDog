@@ -796,6 +796,68 @@ class Simulation(object):
                 self.p.getQuaternionFromEuler(self.initial_orientation)
             )
 
+    def test_joint_sensors(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec: 
+            self.initial_pos = self.position
+            self.initial_orientation = self.orientation
+
+            # Velocities parameters
+            self.vel1_id = self.p.addUserDebugParameter('Hip velocity', -10, 10, 0)
+            self.vel2_id = self.p.addUserDebugParameter('Upper leg velocity', -10, 10, 0)
+            self.vel3_id = self.p.addUserDebugParameter('Lower leg velocity', -10, 10, 0)
+
+            self.reset_id = self.p.addUserDebugParameter('Reset', 1, 0, 0)
+            self.reset_count = 0
+
+        self.p.resetBasePositionAndOrientation(
+            self.quadruped,
+            self.initial_pos,
+            self.p.getQuaternionFromEuler(self.initial_orientation)
+        )
+
+        # Reset position
+        if self.reset_count == self.p.readUserDebugParameter(self.reset_id):
+            self.p.setJointMotorControlArray(
+                self.quadruped,
+                JOINTS_IDS[3:6],
+                controlMode=self.p.VELOCITY_CONTROL,
+                targetVelocities=[
+                    self.p.readUserDebugParameter(self.vel1_id),
+                    self.p.readUserDebugParameter(self.vel2_id),
+                    self.p.readUserDebugParameter(self.vel3_id),
+                ]
+            )
+        else:
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.p.resetJointState(self.quadruped, JOINTS_IDS[3], 0)
+            self.p.resetJointState(self.quadruped, JOINTS_IDS[4], 0)
+            self.p.resetJointState(self.quadruped, JOINTS_IDS[5], 0)
+
+        static_joints = JOINTS_IDS[:3] + JOINTS_IDS[6:]
+        self.p.setJointMotorControlArray(
+            self.quadruped,
+            static_joints,
+            controlMode=self.p.POSITION_CONTROL,
+            targetPositions=[0] * len(static_joints)
+        )
+
+        print(
+            'HIP JOINT ANGLE: {:.4f} | '.format(self.joint_angles[3]) +\
+            'UPPER LEG JOINT ANGLE: {:.4f} | '.format(self.joint_angles[4]) +\
+            'LOWER LEG JOINT ANGLE: {:.4f}\n'.format(self.joint_angles[5]) +\
+
+            'HIP JOINT VELOCITY: {:.4f} | '.format(self.joint_velocities[3]) +\
+            'UPPER LEG JOINT VELOCITY: {:.4f} | '.format(self.joint_velocities[4]) +\
+            'LOWER LEG JOINT VELOCITY: {:.4f}\n'.format(self.joint_velocities[5]) +\
+
+            'HIP JOINT TORQUE: {:.4f} | '.format(self.joint_torques[3]) +\
+            'UPPER LEG JOINT TORQUE: {:.4f} | '.format(self.joint_torques[4]) +\
+            'LOWER LEG JOINT TORQUE: {:.4f}\n\n'.format(self.joint_torques[5]) 
+        )
+
     def test(self, test_function: Callable):
         """
             Function to run a test.

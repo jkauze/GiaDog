@@ -24,7 +24,8 @@ if __name__ == '__main__':
         '-s', '---sensor',
         choices=[
             'position-orientation',
-            'base-velocity'
+            'base-velocity',
+            'joints-data'
         ],
         default='position-orientation',
         help='Sensor to test.',
@@ -34,12 +35,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     sim = Simulation(args.spot_urdf, gui=True)
+    sim.reset(TERRAIN_FILE)
     
     if args.sensor == 'position-orientation': 
-        sim.reset(TERRAIN_FILE)
         test_function = sim.test_position_orientation
     elif args.sensor == 'base-velocity':
-        sim.reset(TERRAIN_FILE)
         test_function = sim.test_base_velocity
+    elif args.sensor == 'joints-data':
+        test_function = sim.test_joint_sensors
 
     sim.test(test_function)
