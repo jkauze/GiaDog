@@ -798,16 +798,25 @@ class Simulation(object):
 
     def test(self, test_function: Callable):
         """
-            [TODO]
+            Function to run a test.
+            
+            Note: The simulation is runned at real time.
+
+            Arguments:
+            ----------
+
+                test_function: Callable -> Function to run, each timestep.
         """
-        self.step()
+        self.p.stepSimulation()
+        
         self.update_sensor_output()
         test_function(True)
-
+        sleep(1/240)
         while True:
-            self.step()
+            self.p.stepSimulation()
             self.update_sensor_output()
             test_function()
+            sleep(1/240)
 
     # ========================= DEBUGGING FUNCTIONS ========================= #
     def set_toes_friction_coefficients(self, friction_coefficient: float):
