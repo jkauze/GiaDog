@@ -878,18 +878,29 @@ class Simulation(object):
             self.reset_id = self.p.addUserDebugParameter('RESET', 1, 0, 0)
             self.reset_count = 0
 
-        else:
-            for id in self.toes_force_id:
-                self.p.removeBody(id)
+            for i, data in enumerate(self.p.getLinkStates(self.quadruped, TOES_IDS)):
+                pos = LinkState(*data).linkWorldPosition
+                self.toes_force_id[i] = self.__create_vector(
+                    pos, 
+                    np.ones((3,)),
+                    0.3,
+                    *(0, 0, 1)
+                )
 
         for i, data in enumerate(self.p.getLinkStates(self.quadruped, TOES_IDS)):
-            pos = LinkState(*data).linkWorldPosition
-            self.toes_force_id[i] = self.__create_vector(
-                pos, 
-                pos + self.normal_toe[i],
-                self.toes_force1[i],
-                *(0, 0, 1)
-            )
+            if self.toes_contact[i]:
+                pos = LinkState(*data).linkWorldPosition
+                self.__update_vector(
+                    self.toes_force_id[i],
+                    pos, 
+                    pos + self.normal_toe[i],
+                )
+            else:
+                self.__update_vector(
+                    self.toes_force_id[i],
+                    np.array([-100, -100, -100]), 
+                    np.array([-101, -101, -101]),
+                )
 
         # Verify buttons
         if self.go_up_count != self.p.readUserDebugParameter(self.go_up_id):
@@ -903,29 +914,29 @@ class Simulation(object):
             self.current_go_down = True
 
         # Reset position
-        #self.p.resetBasePositionAndOrientation(
-        #    self.quadruped,
-        #    [self.initial_pos[0], self.initial_pos[1], self.position[2]],
-        #    self.p.getQuaternionFromEuler(self.initial_orientation)
-        #)
+        self.p.resetBasePositionAndOrientation(
+            self.quadruped,
+            [self.initial_pos[0], self.initial_pos[1], self.position[2]],
+            self.p.getQuaternionFromEuler(self.initial_orientation)
+        )
 
-        #if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
-        #    self.reset_count = self.p.readUserDebugParameter(self.reset_id)
-        #    self.p.resetBasePositionAndOrientation(
-        #        self.quadruped,
-        #        self.initial_pos,
-        #        self.p.getQuaternionFromEuler(self.initial_orientation)
-        #    )
-        #    self.p.setJointMotorControlArray(
-        #        self.quadruped,
-        #        JOINTS_IDS,
-        #        controlMode=self.p.POSITION_CONTROL,
-        #        targetPositions=[0] * len(JOINTS_IDS)
-        #    )
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                self.initial_pos,
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+            self.p.setJointMotorControlArray(
+                self.quadruped,
+                JOINTS_IDS,
+                controlMode=self.p.POSITION_CONTROL,
+                targetPositions=[0] * len(JOINTS_IDS)
+            )
 
         # Apply forces
-        #if self.current_go_up: self.__apply_force([0, 0, 100])
-        #elif self.current_go_down: self.__apply_force([0, 0, -70])
+        if self.current_go_up: self.__apply_force([0, 0, 100])
+        elif self.current_go_down: self.__apply_force([0, 0, -70])
 
         print(f'TOES CONTACT: {self.toes_contact}')
 
