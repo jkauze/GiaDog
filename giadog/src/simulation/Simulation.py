@@ -858,6 +858,78 @@ class Simulation(object):
             'LOWER LEG JOINT TORQUE: {:.4f}\n\n'.format(self.joint_torques[5]) 
         )
 
+    def test_toes_contact(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec:
+            self.toes_force_id = [-1] * 4
+            self.initial_pos = self.position
+            self.initial_orientation = self.orientation
+
+            self.go_up_id = self.p.addUserDebugParameter('GO UP', 1, 0, 0)
+            self.go_up_count = 0
+            self.current_go_up = False
+
+            self.go_down_id = self.p.addUserDebugParameter('GO DOWN', 1, 0, 0)
+            self.go_down_count = 0
+            self.current_go_down = False
+
+            self.reset_id = self.p.addUserDebugParameter('RESET', 1, 0, 0)
+            self.reset_count = 0
+
+        else:
+            for id in self.toes_force_id:
+                self.p.removeBody(id)
+
+        for i, data in enumerate(self.p.getLinkStates(self.quadruped, TOES_IDS)):
+            pos = LinkState(*data).linkWorldPosition
+            self.toes_force_id[i] = self.__create_vector(
+                pos, 
+                pos + self.normal_toe[i],
+                self.toes_force1[i],
+                *(0, 0, 1)
+            )
+
+        # Verify buttons
+        if self.go_up_count != self.p.readUserDebugParameter(self.go_up_id):
+            self.go_up_count = self.p.readUserDebugParameter(self.go_up_id)
+            self.current_go_up = True
+            self.current_go_down = False
+
+        if self.go_down_count != self.p.readUserDebugParameter(self.go_down_id):
+            self.go_down_count = self.p.readUserDebugParameter(self.go_down_id)
+            self.current_go_up = False
+            self.current_go_down = True
+
+        # Reset position
+        #self.p.resetBasePositionAndOrientation(
+        #    self.quadruped,
+        #    [self.initial_pos[0], self.initial_pos[1], self.position[2]],
+        #    self.p.getQuaternionFromEuler(self.initial_orientation)
+        #)
+
+        #if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+        #    self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+        #    self.p.resetBasePositionAndOrientation(
+        #        self.quadruped,
+        #        self.initial_pos,
+        #        self.p.getQuaternionFromEuler(self.initial_orientation)
+        #    )
+        #    self.p.setJointMotorControlArray(
+        #        self.quadruped,
+        #        JOINTS_IDS,
+        #        controlMode=self.p.POSITION_CONTROL,
+        #        targetPositions=[0] * len(JOINTS_IDS)
+        #    )
+
+        # Apply forces
+        #if self.current_go_up: self.__apply_force([0, 0, 100])
+        #elif self.current_go_down: self.__apply_force([0, 0, -70])
+
+        print(f'TOES CONTACT: {self.toes_contact}')
+
+
     def test(self, test_function: Callable):
         """
             Function to run a test.

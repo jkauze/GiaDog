@@ -25,7 +25,8 @@ if __name__ == '__main__':
         choices=[
             'position-orientation',
             'base-velocity',
-            'joints-data'
+            'joints-data',
+            'toes-contact'
         ],
         default='position-orientation',
         help='Sensor to test.',
@@ -43,5 +44,7 @@ if __name__ == '__main__':
         test_function = sim.test_base_velocity
     elif args.sensor == 'joints-data':
         test_function = sim.test_joint_sensors
+    elif args.sensor == 'toes-contact':
+        test_function = sim.test_toes_contact
 
     sim.test(test_function)
