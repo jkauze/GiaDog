@@ -1082,6 +1082,105 @@ class Simulation(object):
             f'SHANKS CONTACTS {self.shanks_contact}'
         )
 
+    def test_friction(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec:
+            self.toes_force_id = [-1] * 4
+            self.initial_pos = np.array(self.position)
+            self.current_pos = np.array(self.position)
+            self.initial_orientation = self.orientation
+
+            # Move parameters
+            self.north_id = self.p.addUserDebugParameter('NORTH', 1, 0, 0)
+            self.north_count = 0
+
+            self.east_id = self.p.addUserDebugParameter('EAST', 1, 0, 0)
+            self.east_count = 0
+
+            self.south_id = self.p.addUserDebugParameter('SOUTH', 1, 0, 0)
+            self.south_count = 0
+
+            self.west_id = self.p.addUserDebugParameter('WEST', 1, 0, 0)
+            self.west_count = 0
+
+            self.go_up_id = self.p.addUserDebugParameter('GO UP', 1, 0, 0)
+            self.go_up_count = 0
+
+            self.go_down_id = self.p.addUserDebugParameter('GO DOWN', 1, 0, 0)
+            self.go_down_count = 0
+
+            self.stop_id = self.p.addUserDebugParameter('STOP', 1, 0, 0)
+            self.stop_count = 0
+            self.current_state = 'STOP'
+
+            self.reset_id = self.p.addUserDebugParameter('RESET', 1, 0, 0)
+            self.reset_count = 0
+
+        # Verify buttons
+        if self.north_count != self.p.readUserDebugParameter(self.north_id):
+            self.north_count = self.p.readUserDebugParameter(self.north_id)
+            self.current_state = 'NORTH'
+
+        if self.east_count != self.p.readUserDebugParameter(self.east_id):
+            self.east_count = self.p.readUserDebugParameter(self.east_id)
+            self.current_state = 'EAST'
+
+        if self.south_count != self.p.readUserDebugParameter(self.south_id):
+            self.south_count = self.p.readUserDebugParameter(self.south_id)
+            self.current_state = 'SOUTH'
+
+        if self.west_count != self.p.readUserDebugParameter(self.west_id):
+            self.west_count = self.p.readUserDebugParameter(self.west_id)
+            self.current_state = 'WEST'
+
+        if self.go_up_count != self.p.readUserDebugParameter(self.go_up_id):
+            self.go_up_count = self.p.readUserDebugParameter(self.go_up_id)
+            self.current_state = 'GO UP'
+
+        if self.go_down_count != self.p.readUserDebugParameter(self.go_down_id):
+            self.go_down_count = self.p.readUserDebugParameter(self.go_down_id)
+            self.current_state = 'GO DOWN'
+
+        if self.stop_count != self.p.readUserDebugParameter(self.stop_id):
+            self.stop_count = self.p.readUserDebugParameter(self.stop_id)
+            self.current_state = 'STOP'
+
+        # Reset
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.current_pos = np.array(self.initial_pos)
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                self.initial_pos,
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+            for ID in JOINTS_IDS:
+                self.p.resetJointState(self.quadruped, ID, 0)
+        # Horizontal move
+        elif self.current_state in ['NORTH', 'EAST', 'SOUTH', 'WEST']:
+            self.current_pos[:2] = self.position[:2]
+        # Vertical move 
+        elif self.current_state in ['GO UP', 'GO DOWN']:
+            self.current_pos[2] = self.position[2]
+
+        self.p.resetBasePositionAndOrientation(
+            self.quadruped,
+            self.current_pos,
+            self.p.getQuaternionFromEuler(self.initial_orientation)
+        )
+
+        # Apply forces
+        if self.current_state == 'NORTH': self.__apply_force([-200, 0, 0])
+        elif self.current_state == 'EAST': self.__apply_force([0, 200, 0])
+        elif self.current_state == 'SOUTH': self.__apply_force([200, 0, 0])
+        elif self.current_state == 'WEST': self.__apply_force([0, -200, 0])
+        elif self.current_state == 'GO UP': self.__apply_force([0, 0, 100])
+        elif self.current_state == 'GO DOWN': self.__apply_force([0, 0, -70])
+
+        print('GROUND FRICTION: [{:.4f}, {:.4f}, {:.4f}, {:.4f}]'.format(*self.ground_friction))
+
     def test(self, test_function: Callable):
         """
             Function to run a test.
@@ -1340,7 +1439,7 @@ class Simulation(object):
             t = t+1
             if t % 120 == 0: self.draw_height_field_lines()
 
-    def test_friction(self):
+    def test_friction_(self):
         """
             ESP:
             

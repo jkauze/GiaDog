@@ -28,7 +28,8 @@ if __name__ == '__main__':
             'joints-data',
             'toes-contact',
             'thighs-shanks-contact',
-            'desired-direction'
+            'desired-direction',
+            'friction'
         ],
         default='position-orientation',
         help='Sensor to test.',
@@ -57,5 +58,8 @@ if __name__ == '__main__':
     elif args.sensor == 'desired-direction':
         sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_desired_direction
+    elif args.sensor == 'friction':
+        sim.reset('terrains/initial_hills.txt')
+        test_function = sim.test_friction
 
     sim.test(test_function)
