@@ -731,6 +731,74 @@ class Simulation(object):
             r_o,
             orientation
         )
+    
+    def __create_ball(
+            self,
+            r_o : np.array, 
+            radius : float,
+            r: int=0, 
+            g: int=0, 
+            b: int=1):
+        """
+        Creates a visual shape of a ball at position r_o in world coordinates,
+        with the given radius and color.
+
+        Arguments:
+        ----------
+            r_o: numpy.array, shape (3,)
+                Position of the ball.
+
+            radius: float
+                Radius of the ball.
+
+            r: float, optional
+                Red color component.
+                Default: 0
+
+            g: float, optional
+                Green color component.
+                Default: 0
+
+            b: float, optional
+                Blue color component.
+                Default: 1
+
+        Return:
+        -------
+            Ball id.
+        """
+        visualShapeId = p.createVisualShape(
+            shapeType=p.GEOM_SPHERE,
+            radius=radius,
+            rgbaColor=[r,g,b,1],
+            specularColor=[0.4,.4,0],
+        )
+        ball = p.createMultiBody(
+            baseMass=0, 
+            baseVisualShapeIndex = visualShapeId, 
+            basePosition = r_o, 
+            useMaximalCoordinates=False
+        )
+
+        return ball
+    
+    def __update_ball(self, ball_id: int, r_o: np.array):
+        """
+        Updates the position of a ball.
+
+        Arguments:
+        ----------
+            ball_id: int
+                Ball ID.
+
+            r_o: numpy.array, shape (3,)
+                Position of the ball.
+        """
+        p.resetBasePositionAndOrientation(
+            ball_id,
+            r_o,
+            [0,0,0,1]
+        )
 
     def test_position_orientation(self, first_exec: bool=False):
         """
@@ -856,6 +924,183 @@ class Simulation(object):
             'HIP JOINT TORQUE: {:.4f} | '.format(self.joint_torques[3]) +\
             'UPPER LEG JOINT TORQUE: {:.4f} | '.format(self.joint_torques[4]) +\
             'LOWER LEG JOINT TORQUE: {:.4f}\n\n'.format(self.joint_torques[5]) 
+        )
+
+    def test_toes_contact(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec:
+            self.toes_force_id = [-1] * 4
+            self.initial_pos = self.position
+            self.initial_orientation = self.orientation
+
+            self.go_up_id = self.p.addUserDebugParameter('GO UP', 1, 0, 0)
+            self.go_up_count = 0
+            self.current_go_up = False
+
+            self.go_down_id = self.p.addUserDebugParameter('GO DOWN', 1, 0, 0)
+            self.go_down_count = 0
+            self.current_go_down = False
+
+            self.reset_id = self.p.addUserDebugParameter('RESET', 1, 0, 0)
+            self.reset_count = 0
+
+            for i, data in enumerate(self.p.getLinkStates(self.quadruped, TOES_IDS)):
+                pos = LinkState(*data).linkWorldPosition
+                self.toes_force_id[i] = self.__create_vector(
+                    pos, 
+                    np.ones((3,)),
+                    0.3,
+                    *(0, 0, 1)
+                )
+
+        for i, data in enumerate(self.p.getLinkStates(self.quadruped, TOES_IDS)):
+            if self.toes_contact[i]:
+                pos = LinkState(*data).linkWorldPosition
+                self.__update_vector(
+                    self.toes_force_id[i],
+                    pos, 
+                    pos + self.normal_toe[i],
+                )
+            else:
+                self.__update_vector(
+                    self.toes_force_id[i],
+                    np.array([-100, -100, -100]), 
+                    np.array([-101, -101, -101]),
+                )
+
+        # Verify buttons
+        if self.go_up_count != self.p.readUserDebugParameter(self.go_up_id):
+            self.go_up_count = self.p.readUserDebugParameter(self.go_up_id)
+            self.current_go_up = True
+            self.current_go_down = False
+
+        if self.go_down_count != self.p.readUserDebugParameter(self.go_down_id):
+            self.go_down_count = self.p.readUserDebugParameter(self.go_down_id)
+            self.current_go_up = False
+            self.current_go_down = True
+
+        # Reset position
+        self.p.resetBasePositionAndOrientation(
+            self.quadruped,
+            [self.initial_pos[0], self.initial_pos[1], self.position[2]],
+            self.p.getQuaternionFromEuler(self.initial_orientation)
+        )
+
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                self.initial_pos,
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+            self.p.setJointMotorControlArray(
+                self.quadruped,
+                JOINTS_IDS,
+                controlMode=self.p.POSITION_CONTROL,
+                targetPositions=[0] * len(JOINTS_IDS)
+            )
+
+        # Apply forces
+        if self.current_go_up: self.__apply_force([0, 0, 100])
+        elif self.current_go_down: self.__apply_force([0, 0, -70])
+
+        print(f'TOES CONTACT: {self.toes_contact}')
+
+    def test_thighs_shanks_contact(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec: 
+            self.initial_pos = self.position
+            self.initial_orientation = self.orientation
+
+            # Move parameters
+            self.north_id = self.p.addUserDebugParameter('NORTH', 1, 0, 0)
+            self.north_count = 0
+            self.go_north = False
+
+            self.east_id = self.p.addUserDebugParameter('EAST', 1, 0, 0)
+            self.east_count = 0
+            self.go_east = False
+
+            self.south_id = self.p.addUserDebugParameter('SOUTH', 1, 0, 0)
+            self.south_count = 0
+            self.go_south = False
+
+            self.west_id = self.p.addUserDebugParameter('WEST', 1, 0, 0)
+            self.west_count = 0
+            self.go_west = False
+
+            self.stop_id = self.p.addUserDebugParameter('STOP', 1, 0, 0)
+            self.stop_count = 0
+
+            # Rese state
+            self.reset_id = self.p.addUserDebugParameter('RESET', 1, 0, 0)
+            self.reset_count = 0
+
+        # Verify buttons
+        if self.north_count != self.p.readUserDebugParameter(self.north_id):
+            self.north_count = self.p.readUserDebugParameter(self.north_id)
+            self.go_north = True
+            self.go_east = False
+            self.go_south = False 
+            self.go_west = False 
+
+        if self.east_count != self.p.readUserDebugParameter(self.east_id):
+            self.east_count = self.p.readUserDebugParameter(self.east_id)
+            self.go_north = False
+            self.go_east = True
+            self.go_south = False 
+            self.go_west = False 
+
+        if self.south_count != self.p.readUserDebugParameter(self.south_id):
+            self.south_count = self.p.readUserDebugParameter(self.south_id)
+            self.go_north = False
+            self.go_east = False
+            self.go_south = True 
+            self.go_west = False 
+
+        if self.west_count != self.p.readUserDebugParameter(self.west_id):
+            self.west_count = self.p.readUserDebugParameter(self.west_id)
+            self.go_north = False
+            self.go_east = False
+            self.go_south = False 
+            self.go_west = True 
+
+        if self.stop_count != self.p.readUserDebugParameter(self.stop_id):
+            self.stop_count = self.p.readUserDebugParameter(self.stop_id)
+            self.go_north = False
+            self.go_east = False
+            self.go_south = False 
+            self.go_west = False 
+
+        # Reset position
+        if self.reset_count == self.p.readUserDebugParameter(self.reset_id):
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                [self.position[0], self.position[1], self.initial_pos[2]],
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+        else:
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                self.initial_pos,
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+            for ID in JOINTS_IDS:
+                self.p.resetJointState(self.quadruped, ID, 0)
+
+        if self.go_north: self.__apply_force([-200, 0, 0])
+        elif self.go_east: self.__apply_force([0, 200, 0])
+        elif self.go_south: self.__apply_force([200, 0, 0])
+        elif self.go_west: self.__apply_force([0, -200, 0])
+
+        print(
+            f'THIGHS CONTACTS: {self.thighs_contact} | ' +\
+            f'SHANKS CONTACTS {self.shanks_contact}'
         )
 
     def test(self, test_function: Callable):
