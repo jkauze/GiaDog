@@ -159,5 +159,8 @@ devel_isolated/
 # Extras
 models/*
 ~models/.gitkeep
+terrains/hills*
+terrains/steps*
+terrains/stairs*
 .vscode/
 temp-plot.html

@@ -940,6 +940,100 @@ class Simulation(object):
 
         print(f'TOES CONTACT: {self.toes_contact}')
 
+    def test_thighs_shanks_contact(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec: 
+            self.initial_pos = self.position
+            self.initial_orientation = self.orientation
+
+            # Move parameters
+            self.north_id = self.p.addUserDebugParameter('NORTH', 1, 0, 0)
+            self.north_count = 0
+            self.go_north = False
+
+            self.east_id = self.p.addUserDebugParameter('EAST', 1, 0, 0)
+            self.east_count = 0
+            self.go_east = False
+
+            self.south_id = self.p.addUserDebugParameter('SOUTH', 1, 0, 0)
+            self.south_count = 0
+            self.go_south = False
+
+            self.west_id = self.p.addUserDebugParameter('WEST', 1, 0, 0)
+            self.west_count = 0
+            self.go_west = False
+
+            self.stop_id = self.p.addUserDebugParameter('STOP', 1, 0, 0)
+            self.stop_count = 0
+
+            # Rese state
+            self.reset_id = self.p.addUserDebugParameter('RESET', 1, 0, 0)
+            self.reset_count = 0
+
+        # Verify buttons
+        if self.north_count != self.p.readUserDebugParameter(self.north_id):
+            self.north_count = self.p.readUserDebugParameter(self.north_id)
+            self.go_north = True
+            self.go_east = False
+            self.go_south = False 
+            self.go_west = False 
+
+        if self.east_count != self.p.readUserDebugParameter(self.east_id):
+            self.east_count = self.p.readUserDebugParameter(self.east_id)
+            self.go_north = False
+            self.go_east = True
+            self.go_south = False 
+            self.go_west = False 
+
+        if self.south_count != self.p.readUserDebugParameter(self.south_id):
+            self.south_count = self.p.readUserDebugParameter(self.south_id)
+            self.go_north = False
+            self.go_east = False
+            self.go_south = True 
+            self.go_west = False 
+
+        if self.west_count != self.p.readUserDebugParameter(self.west_id):
+            self.west_count = self.p.readUserDebugParameter(self.west_id)
+            self.go_north = False
+            self.go_east = False
+            self.go_south = False 
+            self.go_west = True 
+
+        if self.stop_count != self.p.readUserDebugParameter(self.stop_id):
+            self.stop_count = self.p.readUserDebugParameter(self.stop_id)
+            self.go_north = False
+            self.go_east = False
+            self.go_south = False 
+            self.go_west = False 
+
+        # Reset position
+        if self.reset_count == self.p.readUserDebugParameter(self.reset_id):
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                [self.position[0], self.position[1], self.initial_pos[2]],
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+        else:
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                self.initial_pos,
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+            for ID in JOINTS_IDS:
+                self.p.resetJointState(self.quadruped, ID, 0)
+
+        if self.go_north: self.__apply_force([-200, 0, 0])
+        elif self.go_east: self.__apply_force([0, 200, 0])
+        elif self.go_south: self.__apply_force([200, 0, 0])
+        elif self.go_west: self.__apply_force([0, -200, 0])
+
+        print(
+            f'THIGHS CONTACTS: {self.thighs_contact} | ' +\
+            f'SHANKS CONTACTS {self.shanks_contact}'
+        )
 
     def test(self, test_function: Callable):
         """
