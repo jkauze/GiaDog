@@ -569,8 +569,8 @@ class TeacherEnv(gym.Env):
 
         # A random goal is selected
         x, y = set_goal(terrain, 3)
-        x = x / MESH_SCALE[0] - ROWS / (2 * MESH_SCALE[0])
-        y = y / MESH_SCALE[1] - COLS / (2 * MESH_SCALE[1])
+        x = x * MESH_SCALE[0] - ROWS * MESH_SCALE[0] / 2
+        y = y * MESH_SCALE[1] - COLS * MESH_SCALE[1] / 2
         self.target_dir = np.array([x, y])
         self.turn_dir = randint(-1, 1)
 

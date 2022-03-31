@@ -9,9 +9,10 @@
 import numpy as np
 from typing import *
 from time import sleep
+from terrain_gen import *
 from __env__ import MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
     TOES_IDS, EXTERNAL_FORCE_MAGN, JOINTS_IDS, THIGHS_IDS, SHANKS_IDS, \
-    HIPS_IDS, EXTERNAL_FORCE_TIME
+    HIPS_IDS, EXTERNAL_FORCE_TIME, ROWS, COLS
 
 # Simulacion
 import pybullet as p
@@ -542,14 +543,6 @@ class Simulation(object):
             self.external_force = [0, 0, 0]
             self.external_force_applied = True 
             self.__apply_force(self.external_force)
-
-    def update_base_rpy(self):
-        """
-            Update base orientation (roll, pitch, yaw) for the current simulation step.
-        """
-        self.base_rpy = np.array(self.p.getEulerFromQuaternion(
-            self.p.getBasePositionAndOrientation(self.quadruped)[1] 
-        ))
         
     def update_transf_matrices(self):
         """
@@ -619,7 +612,6 @@ class Simulation(object):
         self.update_height_scan()
         self.update_toes_force()
         self.update_external_force()
-        self.update_base_rpy()
         self.update_transf_matrices()
         self.update_is_fallen()
 
@@ -731,6 +723,61 @@ class Simulation(object):
             r_o,
             orientation
         )
+
+    def test_desired_direction(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec:
+            self.initial_pos = self.position
+            self.initial_orientation = self.orientation
+
+            # Rese state
+            self.reset_id = self.p.addUserDebugParameter('RESET', 1, 0, 0)
+            self.reset_count = 0
+
+            # Generate a new terrain
+            t = terrain(500, 500)
+            x, y = set_goal(t, 2)
+            x = x * MESH_SCALE[0] - ROWS * MESH_SCALE[0] / 2
+            y = y * MESH_SCALE[1] - COLS * MESH_SCALE[1] / 2
+            self.goal = [x, y]
+            save_terrain(t, 'terrains/desired_direction_test.txt')
+            self.reset('terrains/desired_direction_test.txt')
+
+            self.desired_direction_id = self.__create_vector(
+                self.position, 
+                np.array(self.goal + [self.position[2]]),
+                2,
+                *(0, 1, 0)
+            )
+
+        direction = np.array(self.goal + [self.position[2]])
+        self.__update_vector(
+            self.desired_direction_id,
+            self.position, 
+            direction,
+        )
+
+        self.p.resetBasePositionAndOrientation(
+            self.quadruped,
+            [self.position[0], self.position[1], self.initial_pos[2]],
+            self.p.getQuaternionFromEuler(self.initial_orientation)
+        )
+
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                self.initial_pos,
+                self.p.getQuaternionFromEuler(self.initial_orientation)
+            )
+            self.p.setJointMotorControlArray(
+                self.quadruped,
+                JOINTS_IDS,
+                controlMode=self.p.POSITION_CONTROL,
+                targetPositions=[0] * len(JOINTS_IDS)
+            )
 
     def test_position_orientation(self, first_exec: bool=False):
         """
