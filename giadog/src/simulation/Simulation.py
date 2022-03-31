@@ -731,6 +731,74 @@ class Simulation(object):
             r_o,
             orientation
         )
+    
+    def __create_ball(
+            self,
+            r_o : np.array, 
+            radius : float,
+            r: int=0, 
+            g: int=0, 
+            b: int=1):
+        """
+        Creates a visual shape of a ball at position r_o in world coordinates,
+        with the given radius and color.
+
+        Arguments:
+        ----------
+            r_o: numpy.array, shape (3,)
+                Position of the ball.
+
+            radius: float
+                Radius of the ball.
+
+            r: float, optional
+                Red color component.
+                Default: 0
+
+            g: float, optional
+                Green color component.
+                Default: 0
+
+            b: float, optional
+                Blue color component.
+                Default: 1
+
+        Return:
+        -------
+            Ball id.
+        """
+        visualShapeId = p.createVisualShape(
+            shapeType=p.GEOM_SPHERE,
+            radius=radius,
+            rgbaColor=[r,g,b,1],
+            specularColor=[0.4,.4,0],
+        )
+        ball = p.createMultiBody(
+            baseMass=0, 
+            baseVisualShapeIndex = visualShapeId, 
+            basePosition = r_o, 
+            useMaximalCoordinates=False
+        )
+
+        return ball
+    
+    def __update_ball(self, ball_id: int, r_o: np.array):
+        """
+        Updates the position of a ball.
+
+        Arguments:
+        ----------
+            ball_id: int
+                Ball ID.
+
+            r_o: numpy.array, shape (3,)
+                Position of the ball.
+        """
+        p.resetBasePositionAndOrientation(
+            ball_id,
+            r_o,
+            [0,0,0,1]
+        )
 
     def test_position_orientation(self, first_exec: bool=False):
         """
