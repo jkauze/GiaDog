@@ -46,6 +46,7 @@ class Simulation(object):
         self.giadog_urdf_file = giadog_urdf_file
         self.gui = gui
         self.p = bc.BulletClient(connection_mode=p.GUI if gui else p.DIRECT)
+        self.p.setTimeStep(SIM_SECONDS_PER_STEP)
         self.self_collision_enabled = self_collision_enabled
         self.__reset_state()
 
@@ -737,32 +738,32 @@ class Simulation(object):
             g: int=0, 
             b: int=1):
         """
-        Creates a visual shape of a ball at position r_o in world coordinates,
-        with the given radius and color.
+            Creates a visual shape of a ball at position r_o in world 
+            coordinates, with the given radius and color.
 
-        Arguments:
-        ----------
-            r_o: numpy.array, shape (3,)
-                Position of the ball.
+            Arguments:
+            ----------
+                r_o: numpy.array, shape (3,)
+                    Position of the ball.
 
-            radius: float
-                Radius of the ball.
+                radius: float
+                    Radius of the ball.
 
-            r: float, optional
-                Red color component.
-                Default: 0
+                r: float, optional
+                    Red color component.
+                    Default: 0
 
-            g: float, optional
-                Green color component.
-                Default: 0
+                g: float, optional
+                    Green color component.
+                    Default: 0
 
-            b: float, optional
-                Blue color component.
-                Default: 1
+                b: float, optional
+                    Blue color component.
+                    Default: 1
 
-        Return:
-        -------
-            Ball id.
+            Return:
+            -------
+                Ball id.
         """
         visualShapeId = p.createVisualShape(
             shapeType=p.GEOM_SPHERE,
@@ -781,15 +782,15 @@ class Simulation(object):
     
     def __update_ball(self, ball_id: int, r_o: np.array):
         """
-        Updates the position of a ball.
+            Updates the position of a ball.
 
-        Arguments:
-        ----------
-            ball_id: int
-                Ball ID.
+            Arguments:
+            ----------
+                ball_id: int
+                    Ball ID.
 
-            r_o: numpy.array, shape (3,)
-                Position of the ball.
+                r_o: numpy.array, shape (3,)
+                    Position of the ball.
         """
         p.resetBasePositionAndOrientation(
             ball_id,
@@ -799,7 +800,14 @@ class Simulation(object):
 
     def test_desired_direction(self, first_exec: bool=False):
         """
-            [TODO]
+            Test the desired direction by creating a terrain with a random 
+            target and generate an arrow that starts from the robot towards 
+            said target, and stays that way even while the robot moves.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
         """
         if first_exec:
             self.initial_pos = self.position
@@ -810,7 +818,7 @@ class Simulation(object):
             self.reset_count = 0
 
             # Generate a new terrain
-            t = terrain(500, 500)
+            t = steps(500, 500, 1, 0.05, 73)
             x, y = set_goal(t, 2)
             x = x * MESH_SCALE[0] - ROWS * MESH_SCALE[0] / 2
             y = y * MESH_SCALE[1] - COLS * MESH_SCALE[1] / 2
@@ -854,7 +862,12 @@ class Simulation(object):
 
     def test_position_orientation(self, first_exec: bool=False):
         """
-            [TODO]
+            Test the position and orientation of the robot by creating an arrow that starts from the robot and points where the robot is facing, and stays that way even while the robot is moving.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
         """
         r_o = self.position
 
@@ -870,19 +883,41 @@ class Simulation(object):
 
     def test_linear_velocity(self, first_exec: bool=False):
         """
-            [TODO]
+            Test the linear velocity of the robot by forcing it to move 
+            horizontally given the velocity parameters given by the user, thus 
+            showing the linear velocity arrow as a consequence of the movement.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
         """
         if first_exec: 
-            self.initial_pos = self.position
-            self.initial_orientation = self.orientation
-
             # Force parameters
-            self.F_x_id = self.p.addUserDebugParameter('F_x', -10, 10, 0)
-            self.F_y_id = self.p.addUserDebugParameter('F_y', -10, 10, 0)
+            self.vel_x_id = self.p.addUserDebugParameter(
+                'Velocity X', 
+                *(-0.3, 0.3, 0)
+            )
+            self.vel_y_id = self.p.addUserDebugParameter(
+                'Velocity Y', 
+                *(-0.3, 0.3, 0)
+            )
 
             # Rese state
             self.reset_id = self.p.addUserDebugParameter('Reset', 1, 0, 0)
             self.reset_count = 0
+
+            # Create position constraint
+            self.constraint_id = self.p.createConstraint(
+                self.quadruped, 
+                -1, -1, -1, 
+                self.p.JOINT_FIXED, 
+                None, 
+                None, 
+                [0, 0, 1]
+            )
+            self.pos_x = 0
+            self.pos_y = 0
         else: 
             self.p.removeBody(self.linear_vel_id)
 
@@ -894,31 +929,35 @@ class Simulation(object):
             *(1, 0, 0)
         )
 
-        # Apply forces
-        self.__apply_force([
-            1000 * self.p.readUserDebugParameter(self.F_x_id),
-            1000 * self.p.readUserDebugParameter(self.F_y_id),
-            0
-        ])
-
         # Reset position
-        if self.reset_count == self.p.readUserDebugParameter(self.reset_id):
-            self.p.resetBasePositionAndOrientation(
-                self.quadruped,
-                [self.position[0], self.position[1], self.initial_pos[2]],
-                self.p.getQuaternionFromEuler(self.initial_orientation)
-            )
-        else:
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
             self.reset_count = self.p.readUserDebugParameter(self.reset_id)
-            self.p.resetBasePositionAndOrientation(
-                self.quadruped,
-                self.initial_pos,
-                self.p.getQuaternionFromEuler(self.initial_orientation)
-            )
+            self.pos_x = self.pos_y = 0
+
+        # Update position constraint
+        self.p.changeConstraint(
+            self.constraint_id,
+            [self.pos_x, self.pos_y, 1]
+        )
+
+        self.pos_x += self.p.readUserDebugParameter(self.vel_x_id)
+        self.pos_y += self.p.readUserDebugParameter(self.vel_y_id)
+
+        # Reset joint positions
+        for ID in JOINTS_IDS:
+            self.p.resetJointState(self.quadruped, ID, 0)
 
     def test_angular_velocity(self, first_exec: bool=False):
         """
-            [TODO]
+            Test the angular velocity of the robot by forcing it to rotate on 
+            its own vertical axis given the velocity parameter given by the 
+            user, thus showing the angular velocity arrow as a consequence of 
+            the movement.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
         """
         if first_exec:
             self.turn = 0
@@ -937,7 +976,7 @@ class Simulation(object):
             # Angular velocity parameter
             self.angular_vel_id = self.p.addUserDebugParameter(
                 'Angular velocity', 
-                -10, 10, 0
+                *(-10, 10, 0)
             )
         else:
             self.p.removeBody(self.angular_vector_id)
@@ -961,16 +1000,34 @@ class Simulation(object):
 
     def test_joint_sensors(self, first_exec: bool=False):
         """
-            [TODO]
+            Allows the user to modify the rotation of the hip, upper leg and 
+            lower leg joints of the upper right leg of the robot, to then 
+            constantly display the angle, angular velocity and torque of 
+            those 3 joints and test that these data correspond to the 
+            simulation.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
         """
         if first_exec: 
             self.initial_pos = self.position
             self.initial_orientation = self.orientation
 
             # Velocities parameters
-            self.vel1_id = self.p.addUserDebugParameter('Hip velocity', -10, 10, 0)
-            self.vel2_id = self.p.addUserDebugParameter('Upper leg velocity', -10, 10, 0)
-            self.vel3_id = self.p.addUserDebugParameter('Lower leg velocity', -10, 10, 0)
+            self.vel1_id = self.p.addUserDebugParameter(
+                'Hip velocity', 
+                *(-10, 10, 0)
+            )
+            self.vel2_id = self.p.addUserDebugParameter(
+                'Upper leg velocity', 
+                *(-10, 10, 0)
+            )
+            self.vel3_id = self.p.addUserDebugParameter(
+                'Lower leg velocity', 
+                *(-10, 10, 0)
+            )
 
             self.reset_id = self.p.addUserDebugParameter('Reset', 1, 0, 0)
             self.reset_count = 0
@@ -1023,7 +1080,16 @@ class Simulation(object):
 
     def test_toes_contact(self, first_exec: bool=False):
         """
-            [TODO]
+            Tests the contact sensors of the robot's feet by allowing the user 
+            to move the robot up and down, and constantly printing in the 
+            terminal the array that indicates if each foot made contact with 
+            the ground in addition to showing in the simulation the vector
+            that represents the normal force on each leg
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
         """
         if first_exec:
             self.toes_force_id = [-1] * 4
@@ -1050,6 +1116,7 @@ class Simulation(object):
                     *(0, 0, 1)
                 )
 
+        # Update normal vectors
         for i, data in enumerate(self.p.getLinkStates(self.quadruped, TOES_IDS)):
             if self.toes_contact[i]:
                 pos = LinkState(*data).linkWorldPosition
@@ -1059,6 +1126,8 @@ class Simulation(object):
                     pos + self.normal_toe[i],
                 )
             else:
+                # If there is no contact, the vectors are drawn away so that 
+                # they are not seen.
                 self.__update_vector(
                     self.toes_force_id[i],
                     np.array([-100, -100, -100]), 
@@ -1076,13 +1145,14 @@ class Simulation(object):
             self.current_go_up = False
             self.current_go_down = True
 
-        # Reset position
+        # Update position
         self.p.resetBasePositionAndOrientation(
             self.quadruped,
             [self.initial_pos[0], self.initial_pos[1], self.position[2]],
             self.p.getQuaternionFromEuler(self.initial_orientation)
         )
 
+        # Reset robot and joints positions
         if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
             self.reset_count = self.p.readUserDebugParameter(self.reset_id)
             self.p.resetBasePositionAndOrientation(
@@ -1090,12 +1160,8 @@ class Simulation(object):
                 self.initial_pos,
                 self.p.getQuaternionFromEuler(self.initial_orientation)
             )
-            self.p.setJointMotorControlArray(
-                self.quadruped,
-                JOINTS_IDS,
-                controlMode=self.p.POSITION_CONTROL,
-                targetPositions=[0] * len(JOINTS_IDS)
-            )
+            for ID in JOINTS_IDS:
+                self.p.resetJointState(self.quadruped, ID, 0)
 
         # Apply forces
         if self.current_go_up: self.__apply_force([0, 0, 100])
@@ -1105,7 +1171,15 @@ class Simulation(object):
 
     def test_thighs_shanks_contact(self, first_exec: bool=False):
         """
-            [TODO]
+            Places the robot inside a box, then allows the user to move it 
+            horizontally, being able to collide with the walls of the box. 
+            The terminal is constantly showing the arrays that indicates if 
+            the thighs or the shanks came into contact.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
         """
         if first_exec: 
             self.initial_pos = self.position
@@ -1197,40 +1271,18 @@ class Simulation(object):
             f'THIGHS CONTACTS: {self.thighs_contact} | ' +\
             f'SHANKS CONTACTS {self.shanks_contact}'
         )
-    
-    def test_height_scan(self, first_exec: bool=False):
-        """
-        Tests the height scan of the robot, by drawing a ball in the scaned 
-        point.
-
-        Arguments:
-        ----------
-        first_exec: bool -> if True, the parameters are initialized.
-
-        """
-        
-        if first_exec:
-            self.balls = []
-            for i, points in enumerate(self.height_scan_lines): # 
-                balls_i = []
-                for point in points:
-                    balls_i.append(self.__create_ball(
-                        point[1],
-                        0.015,
-                    ))
-                self.balls.append(balls_i)
-
-        else:
-            for i, points in enumerate(self.height_scan_lines): # 
-                for j, point in enumerate(points):
-                    self.__update_ball(
-                        self.balls[i][j],
-                        point[1]
-                    )
 
     def test_friction(self, first_exec: bool=False):
         """
-            [TODO]
+            It places the robot on a fairly rough terrain, then allows the 
+            user to move it both horizontally and vertically and constantly 
+            prints through the terminal the friction force that the legs 
+            receive when in contact with the ground.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
         """
         if first_exec:
             self.toes_force_id = [-1] * 4
@@ -1302,8 +1354,6 @@ class Simulation(object):
                 self.initial_pos,
                 self.p.getQuaternionFromEuler(self.initial_orientation)
             )
-            for ID in JOINTS_IDS:
-                self.p.resetJointState(self.quadruped, ID, 0)
         # Horizontal move
         elif self.current_state in ['NORTH', 'EAST', 'SOUTH', 'WEST']:
             self.current_pos[:2] = self.position[:2]
@@ -1316,6 +1366,8 @@ class Simulation(object):
             self.current_pos,
             self.p.getQuaternionFromEuler(self.initial_orientation)
         )
+        for ID in JOINTS_IDS:
+            self.p.resetJointState(self.quadruped, ID, 0)
 
         # Apply forces
         if self.current_state == 'NORTH': self.__apply_force([-200, 0, 0])
@@ -1327,6 +1379,78 @@ class Simulation(object):
 
         print('GROUND FRICTION: [{:.4f}, {:.4f}, {:.4f}, {:.4f}]'.format(*self.ground_friction))
 
+    def test_height_scan(self, first_exec: bool=False):
+        """
+            Tests the height scan of the robot, by drawing a ball in the scaned 
+            point on a fairly irregular steps terrain.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
+        """
+        
+        if first_exec:
+            # Force parameters
+            self.vel_x_id = self.p.addUserDebugParameter(
+                'Velocity X', 
+                *(-0.1, 0.1, 0)
+            )
+            self.vel_y_id = self.p.addUserDebugParameter(
+                'Velocity Y', 
+                *(-0.1, 0.1, 0)
+            )
+
+            # Rese state
+            self.reset_id = self.p.addUserDebugParameter('Reset', 1, 0, 0)
+            self.reset_count = 0
+
+            # Create position constraint
+            self.constraint_id = self.p.createConstraint(
+                self.quadruped, 
+                -1, -1, -1, 
+                self.p.JOINT_FIXED, 
+                None, 
+                None, 
+                [0, 0, 0.5]
+            )
+            self.pos_x = 0
+            self.pos_y = 0
+
+            self.balls = []
+            for i, points in enumerate(self.height_scan_lines): 
+                balls_i = []
+                for point in points:
+                    balls_i.append(self.__create_ball(
+                        point[1],
+                        0.015,
+                    ))
+                self.balls.append(balls_i)
+
+        # Reset position
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.pos_x = self.pos_y = 0
+            # Reset joint positions
+            for ID in JOINTS_IDS:
+                self.p.resetJointState(self.quadruped, ID, 0)
+
+        # Update position constraint
+        self.p.changeConstraint(
+            self.constraint_id,
+            [self.pos_x, self.pos_y, 0.5]
+        )
+
+        self.pos_x += self.p.readUserDebugParameter(self.vel_x_id)
+        self.pos_y += self.p.readUserDebugParameter(self.vel_y_id)
+
+        for i, points in enumerate(self.height_scan_lines): 
+            for j, point in enumerate(points):
+                self.__update_ball(
+                    self.balls[i][j],
+                    point[1]
+                )
+
     def test(self, test_function: Callable):
         """
             Function to run a test.
@@ -1335,14 +1459,14 @@ class Simulation(object):
 
             Arguments:
             ----------
-
-                test_function: Callable -> Function to run, each timestep.
+                test_function: Callable
+                    Test function to run, each timestep.
         """
         self.p.stepSimulation()
-        
         self.update_sensor_output()
         test_function(True)
         sleep(1/240)
+
         while True:
             self.p.stepSimulation()
             self.update_sensor_output()
