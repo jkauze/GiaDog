@@ -660,7 +660,7 @@ class Simulation(object):
         if vector_length == 0: return -1 
 
         # We normalize the vector
-        vector = length * vector / vector_length
+        vector =  vector / vector_length
         
         # We get the pitch and yaw angles from the vector
         pitch = np.arcsin(-vector[2])
@@ -710,8 +710,11 @@ class Simulation(object):
         # We get the vector direction
         vector = r_f - r_o
 
+        norm = np.linalg.norm(vector)
         # Don't draw zero vectors
-        if np.linalg.norm(vector) == 0: return
+        if norm == 0: return
+
+        vector = vector / norm
         
         # We get the pitch and yaw angles from the vector
         pitch = np.arcsin(-vector[2])
@@ -795,7 +798,7 @@ class Simulation(object):
         if first_exec: self.vector_id = self.__create_vector(r_o, r_f)
         else: self.__update_vector(self.vector_id, r_o, r_f)
 
-    def test_base_velocity(self, first_exec: bool=False):
+    def test_linear_velocity(self, first_exec: bool=False):
         """
             [TODO]
         """
@@ -842,6 +845,49 @@ class Simulation(object):
                 self.initial_pos,
                 self.p.getQuaternionFromEuler(self.initial_orientation)
             )
+
+    def test_angular_velocity(self, first_exec: bool=False):
+        """
+            [TODO]
+        """
+        if first_exec:
+            self.turn = 0
+
+            # Create rotation constraint
+            self.constraint_id = self.p.createConstraint(
+                self.quadruped, 
+                -1, -1, -1, 
+                self.p.JOINT_FIXED, 
+                None, 
+                None, 
+                [0, 0, 2],
+                self.p.getQuaternionFromEuler([0,0,0])
+            )
+
+            # Angular velocity parameter
+            self.angular_vel_id = self.p.addUserDebugParameter(
+                'Angular velocity', 
+                -10, 10, 0
+            )
+        else:
+            self.p.removeBody(self.angular_vector_id)
+            self.turn += self.p.readUserDebugParameter(self.angular_vel_id) / 50
+
+        # Create vectors
+        self.angular_vector_id = self.__create_vector(
+            self.position,
+            self.position + self.angular_vel,
+            np.linalg.norm(self.angular_vel) / 20,
+            *(0, 0, 1)
+        )
+
+        # Update rotation constraint
+        self.p.changeConstraint(
+            self.constraint_id,
+            jointChildFrameOrientation=self.p.getQuaternionFromEuler(
+                [0, 0, self.turn]
+            )
+        )
 
     def test_joint_sensors(self, first_exec: bool=False):
         """

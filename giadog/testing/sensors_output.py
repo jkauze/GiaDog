@@ -24,7 +24,8 @@ if __name__ == '__main__':
         '-s', '---sensor',
         choices=[
             'position-orientation',
-            'base-velocity',
+            'linear-velocity',
+            'angular-velocity',
             'joints-data',
             'toes-contact',
             'thighs-shanks-contact',
@@ -43,9 +44,12 @@ if __name__ == '__main__':
     if args.sensor == 'position-orientation': 
         sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_position_orientation
-    elif args.sensor == 'base-velocity':
+    elif args.sensor == 'linear-velocity':
         sim.reset('terrains/initial_hills.txt')
-        test_function = sim.test_base_velocity
+        test_function = sim.test_linear_velocity
+    elif args.sensor == 'angular-velocity':
+        sim.reset('terrains/initial_hills.txt')
+        test_function = sim.test_angular_velocity
     elif args.sensor == 'joints-data':
         sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_joint_sensors
