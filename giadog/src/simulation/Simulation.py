@@ -510,6 +510,8 @@ class Simulation(object):
             x,y,z =  toe_position 
             P = self.__foot_scan_coordinates(x,y,yaw) 
             z_terrain = [self.__terrain_height(x_p,y_p) for (x_p,y_p) in P]
+            # TODO: a parameter should be put in place to not calculate the scan
+            # lines during training.
             self.height_scan_lines[i] = np.array([ 
                 [[x, y, z], [x_p, y_p, z_t]] for (x_p, y_p), z_t in zip(P, z_terrain)]
             )
@@ -1102,6 +1104,38 @@ class Simulation(object):
             f'THIGHS CONTACTS: {self.thighs_contact} | ' +\
             f'SHANKS CONTACTS {self.shanks_contact}'
         )
+    
+    def test_height_scan(self, first_exec: bool=False):
+        """
+        Tests the height scan of the robot, by drawing a ball in the scaned 
+        point.
+
+        Arguments:
+        ----------
+        first_exec: bool -> if True, the parameters are initialized.
+
+        """
+        
+        if first_exec:
+            self.balls = []
+            for i, points in enumerate(self.height_scan_lines): # 
+                balls_i = []
+                for point in points:
+                    balls_i.append(self.__create_ball(
+                        point[1],
+                        0.015,
+                    ))
+                self.balls.append(balls_i)
+
+        else:
+            for i, points in enumerate(self.height_scan_lines): # 
+                for j, point in enumerate(points):
+                    self.__update_ball(
+                        self.balls[i][j],
+                        point[1]
+                    )
+            
+
 
     def test(self, test_function: Callable):
         """

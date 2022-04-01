@@ -27,7 +27,8 @@ if __name__ == '__main__':
             'base-velocity',
             'joints-data',
             'toes-contact',
-            'thighs-shanks-contact'
+            'thighs-shanks-contact',
+            'height-scan'
         ],
         default='position-orientation',
         help='Sensor to test.',
@@ -39,19 +40,23 @@ if __name__ == '__main__':
     sim = Simulation(args.spot_urdf, gui=True)
     
     if args.sensor == 'position-orientation': 
-        sim.reset('terrains/initial_hills')
+        sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_position_orientation
     elif args.sensor == 'base-velocity':
-        sim.reset('terrains/initial_hills')
+        sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_base_velocity
     elif args.sensor == 'joints-data':
-        sim.reset('terrains/initial_hills')
+        sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_joint_sensors
     elif args.sensor == 'toes-contact':
-        sim.reset('terrains/initial_hills')
+        sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_toes_contact
     elif args.sensor == 'thighs-shanks-contact':
         sim.reset('terrains/contact_test.txt')
         test_function = sim.test_thighs_shanks_contact
+    
+    elif args.sensor == 'height-scan':
+        sim.reset('terrains/gym_terrain.txt')
+        test_function = sim.test_height_scan
 
     sim.test(test_function)
