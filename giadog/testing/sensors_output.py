@@ -31,6 +31,7 @@ if __name__ == '__main__':
             'thighs-shanks-contact',
             'desired-direction',
             'friction'
+            'heigh-scan'
         ],
         default='position-orientation',
         help='Sensor to test.',
@@ -65,5 +66,8 @@ if __name__ == '__main__':
     elif args.sensor == 'friction':
         sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_friction
+    elif args.sensor == 'height-scan':
+        sim.reset('terrains/gym_terrain.txt')
+        test_function = sim.test_height_scan
 
     sim.test(test_function)

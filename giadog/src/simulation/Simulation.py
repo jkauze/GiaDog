@@ -511,6 +511,8 @@ class Simulation(object):
             x,y,z =  toe_position 
             P = self.__foot_scan_coordinates(x,y,yaw) 
             z_terrain = [self.__terrain_height(x_p,y_p) for (x_p,y_p) in P]
+            # TODO: a parameter should be put in place to not calculate the scan
+            # lines during training.
             self.height_scan_lines[i] = np.array([ 
                 [[x, y, z], [x_p, y_p, z_t]] for (x_p, y_p), z_t in zip(P, z_terrain)]
             )
@@ -725,6 +727,74 @@ class Simulation(object):
             vector_id,
             r_o,
             orientation
+        )
+    
+    def __create_ball(
+            self,
+            r_o : np.array, 
+            radius : float,
+            r: int=0, 
+            g: int=0, 
+            b: int=1):
+        """
+        Creates a visual shape of a ball at position r_o in world coordinates,
+        with the given radius and color.
+
+        Arguments:
+        ----------
+            r_o: numpy.array, shape (3,)
+                Position of the ball.
+
+            radius: float
+                Radius of the ball.
+
+            r: float, optional
+                Red color component.
+                Default: 0
+
+            g: float, optional
+                Green color component.
+                Default: 0
+
+            b: float, optional
+                Blue color component.
+                Default: 1
+
+        Return:
+        -------
+            Ball id.
+        """
+        visualShapeId = p.createVisualShape(
+            shapeType=p.GEOM_SPHERE,
+            radius=radius,
+            rgbaColor=[r,g,b,1],
+            specularColor=[0.4,.4,0],
+        )
+        ball = p.createMultiBody(
+            baseMass=0, 
+            baseVisualShapeIndex = visualShapeId, 
+            basePosition = r_o, 
+            useMaximalCoordinates=False
+        )
+
+        return ball
+    
+    def __update_ball(self, ball_id: int, r_o: np.array):
+        """
+        Updates the position of a ball.
+
+        Arguments:
+        ----------
+            ball_id: int
+                Ball ID.
+
+            r_o: numpy.array, shape (3,)
+                Position of the ball.
+        """
+        p.resetBasePositionAndOrientation(
+            ball_id,
+            r_o,
+            [0,0,0,1]
         )
 
     def test_desired_direction(self, first_exec: bool=False):
@@ -1127,6 +1197,36 @@ class Simulation(object):
             f'THIGHS CONTACTS: {self.thighs_contact} | ' +\
             f'SHANKS CONTACTS {self.shanks_contact}'
         )
+    
+    def test_height_scan(self, first_exec: bool=False):
+        """
+        Tests the height scan of the robot, by drawing a ball in the scaned 
+        point.
+
+        Arguments:
+        ----------
+        first_exec: bool -> if True, the parameters are initialized.
+
+        """
+        
+        if first_exec:
+            self.balls = []
+            for i, points in enumerate(self.height_scan_lines): # 
+                balls_i = []
+                for point in points:
+                    balls_i.append(self.__create_ball(
+                        point[1],
+                        0.015,
+                    ))
+                self.balls.append(balls_i)
+
+        else:
+            for i, points in enumerate(self.height_scan_lines): # 
+                for j, point in enumerate(points):
+                    self.__update_ball(
+                        self.balls[i][j],
+                        point[1]
+                    )
 
     def test_friction(self, first_exec: bool=False):
         """
