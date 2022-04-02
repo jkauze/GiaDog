@@ -139,6 +139,7 @@ class TeacherEnv(gym.Env):
                 high = np.float32(np.inf * np.ones((FOOT_HISTORY_LEN, 4, 3))),
                 dtype = np.float32
             )),
+             # Privileged Space (for the controller)
             ('toes_contact', spaces.Box(
                 low = np.int8(np.zeros((4,))), 
                 high = np.int8(np.ones((4,))),
@@ -154,8 +155,6 @@ class TeacherEnv(gym.Env):
                 high = np.int8(np.ones((4,))),
                 dtype = np.int8
             )),
-
-            # Privileged Space 
             ('normal_foot', spaces.Box(
                 low = np.float32(-np.inf * np.ones((4, 3))), 
                 high = np.float32(np.inf * np.ones((4, 3))),

@@ -2,7 +2,7 @@
     Authors: Amin Arriaga, Eduardo Lopez
     Project: Graduation Thesis: GIAdog
 
-    ARS: Augmented Random Search
+    ARS: Augmented Random Search implementation.
 
 
     References:
@@ -12,21 +12,23 @@
 """
 import numpy as np
 from typing import *
-
+from time import sleep
 
 class ARS():
 
-    def __init__(self, gym_env, step_size, sample_dir_per_iter, 
+    def __init__(self, gym_env, state_features,step_size, sample_dir_per_iter, 
                 explor_std_dev_noise, top_dir_num, train_ep_steps
                 ):
 
-        """
+        """ 
         Creates an instance of an ARS agent.
         (Augmented Random Search)
 
         Arguments
         ---------
         gym_env: gym.Env -> The environment to be used by the agent.
+
+        state_features: List[str] -> The features to be used by the agent.
 
         step size: float -> Learning rate.
 
@@ -41,26 +43,37 @@ class ARS():
         """
         
         self.step_size   = step_size
+        self.state_features = state_features
         self.sample_dir_per_iter   = sample_dir_per_iter
         self.explor_std_dev_noise   = explor_std_dev_noise
         self.top_dir_num   = top_dir_num
         self.env = gym_env
         self.train_ep_steps =  train_ep_steps
 
-        self.priviliged_data = self.env.PRIVILIGED_DATA
-
-        self.non_priviliged_data = self.env.NON_PRIVILIGED_DATA
-
+        # from the enviroment we get the dimensions of the state using the 
+        # state_features list
         
-        self.normalizer = Normalizer(145+59)
+
+        self.state_dim  = 0
+        for key in self.state_features:
+            elem = self.env.observation_space[key].shape
+            if len(elem) == 0:
+                self.state_dim  += 1
+            else:
+                dims = [elem[i] for i in range(len(elem))]
+                self.state_dim  += np.prod(dims)
+        
+        
+        self.normalizer = Normalizer(self.state_dim)
 
 
-        # Chequeamos que el numero de parametros b sea menor a N
+        # Chequeamos que el numero de parametros b sea menor i igual a N
+        # We check that the top_dir_num is less than or equal to the sample_dir_per_iter
         assert self.top_dir_num <= self.sample_dir_per_iter
     
         # [ESP] Inicializamos los parametros de la "red" del agente
         # [ENG] Initialize the parameters (weights) of the "net" of the agent
-        self.theta = np.zeros((16, 145+59)) 
+        self.theta = np.zeros((16, self.state_dim)) 
 
 
     def update_V2(self, terrain_file):
@@ -100,6 +113,7 @@ class ARS():
         # [ENG]
         # Sort the pairs of rewards and their corresponding delta delta_i
         # according to max(r_p, r_n)
+        
         scores  = {max(r_p, r_n) : (r_p,r_n, delta_i) for (r_p, r_n, delta_i) \
                     in zip(r_pos, r_neg, delta)}
         
@@ -131,6 +145,7 @@ class ARS():
         """        
         x = self.process_obs(obs)
         x = self.normalizer.normalize(x)
+        
         
         return self.theta.dot(x)
 
@@ -168,16 +183,10 @@ class ARS():
         np.ndarray -> The processed observation.
         """
         input_x_t = np.concatenate(
-            [np.reshape(obs[data],-1) for data in self.priviliged_data]
+            [np.reshape(obs[feature],-1) for feature in self.state_features]
         )
         
-        input_o_t = np.concatenate(
-            [np.reshape(obs[data],-1) for data in self.non_priviliged_data]
-        )
-
-        x = np.concatenate((input_x_t, input_o_t)).flatten()
-        
-        x = np.nan_to_num(x)
+        x = np.nan_to_num(input_x_t)
         
         return x
     
@@ -206,13 +215,14 @@ class ARS():
         while not done and steps < self.train_ep_steps:
             self.normalizer.observe(self.process_obs(state))         
             action = self.evaluate_policy(weights, state)
-            state, reward, done, _ = self.env.step([action])
+            state, reward, done, _ = self.env.step(action)
             
             reward = max(min(reward, 1), -1)
             sum_rewards += reward
             steps += 1
-        
-        return sum_rewards
+            
+
+        return float(sum_rewards)
     
 
     def sample_deltas(self):
@@ -230,6 +240,48 @@ class ARS():
 
         return [np.random.randn(*self.theta.shape) for _ in \
             range(self.sample_dir_per_iter)]
+    
+    def save_model(self, path):
+        """
+        Saves the model weights and normalizer.
+
+        Arguments:
+        ----------
+        path: str -> Path to the file where the parameters will be saved.
+
+        Returns:
+        --------
+        None
+        """
+        
+        np.savez(
+            path,
+            theta=self.theta,
+            normalizer_n =self.normalizer.n,
+            normalizer_mu = self.normalizer.mu,
+            normalizer_dmu = self.normalizer.dmu,
+            normalizer_var = self.normalizer.var,
+        )
+    
+    def load_model(self, path):
+        """
+        Loads the model weights and normalizer parameters.
+
+        Arguments:
+        ----------
+        path: str -> Path to the file where the parameters are saved.
+
+        Returns:
+        --------
+        None
+        """
+
+        data = np.load(path)
+        self.theta = data['theta']
+        self.normalizer.n = data['normalizer_n']
+        self.normalizer.mu = data['normalizer_mu']
+        self.normalizer.dmu = data['normalizer_dmu']
+        self.normalizer.var = data['normalizer_var']
 
 class Normalizer():
 
@@ -294,3 +346,7 @@ class Normalizer():
         obs_mu  = self.mu 
         obs_sigma = np.sqrt(self.var)
         return (x - obs_mu) / obs_sigma
+    
+    
+
+
