@@ -14,6 +14,6 @@ if __name__ == '__main__':
     sim.reset('terrains/gym_terrain.txt', 
                 fix_robot_base=False)
     
-    test_function = sim.test_FTG_beta
+    test_function = sim.test_FTG
 
     sim.test(test_function)

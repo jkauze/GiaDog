@@ -107,7 +107,6 @@ class Simulation(object):
         self.external_force  = np.zeros([3])
 
         # Other data
-        self.base_rpy         = np.zeros([3]) # TODO
         self.transf_matrices  = np.zeros([4,4,4])
         self.joint_torques    = np.zeros([12])
         self.is_fallen        = False
@@ -555,7 +554,7 @@ class Simulation(object):
         """
             Update the transformation matrices from the hip to the leg base.
         """
-        self.transf_matrices = transformations_matrices(self.base_rpy)
+        self.transf_matrices = transformations_matrices(self.orientation)
 
     def update_is_fallen(self):
         """
@@ -1455,7 +1454,7 @@ class Simulation(object):
                     point[1]
                 )
 
-    def test_FTG_beta(self, first_exec: bool=False):
+    def test_FTG(self, first_exec: bool=False):
 
         """
         Tesitng function to test the controller's Foot Trajectory Generator.
@@ -1524,7 +1523,7 @@ class Simulation(object):
                 foot_trajectories_debug(nn_output, self.timestep,
                                             sigma_0 = sigma_0,
                                             f_0=base_frequency)
-        T_list = transformations_matrices(self.base_rpy)
+        T_list = transformations_matrices(self.orientation)
         
         for i in range(4):
             r_Hip = np.array(self.p.getLinkState(self.quadruped, 
@@ -1932,72 +1931,4 @@ class Simulation(object):
                 joint_target_positions += list(leg_angles)
             
             self.actuate_joints(joint_target_positions)
-
-    def test_FTG(self):
-
-        """
-        Tesitng function to test the controller's Foot Trajectory Generator.
-
-        Arguments
-        ----------
-        self :-> simulation object
-            The simulation object.
-
-        Return
-        ------
-        None
-        """
-
-        t = 0
-        # We create a constraint to keep the quadruped over the ground
-       
-        
-        
-        sigma_0 = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
-        while True: 
-            self.p.stepSimulation()
-            self.update_sensor_output()
-            sleep(1/240) 
-            
-            # 
-            if t%5 == 0:
-                joints_angles = []
-                nn_output = [0]*16
-                target_foot_positions, FTG_frequencies, FTG_phases = \
-                        foot_trajectories(nn_output, t/240,
-                                                    sigma_0 = sigma_0,
-                                                    f_0=12)
-                T_list = transformations_matrices(self.base_rpy)
-                
-                for i in range(4):
-                    r_Hip = np.array(self.p.getLinkState(self.quadruped, 
-                            HIPS_IDS[i])[4])
-                    
-                    r_o = target_foot_positions[i]
-                    T = T_list[i]
-
-                    
-                    r = T @ np.concatenate((r_o, [1]), axis = 0)
-                    r = r[:3]
-                    if i%2==0:
-                        leg_angles = solve_leg_IK("LEFT", r)
-                    else:
-                        leg_angles = solve_leg_IK("RIGHT", r)
-                    
-                    joints_angles += list(leg_angles)
-
-                    # debug
-                    self.trace_line(
-                                    np.array([r_Hip[0], 
-                                    r_Hip[1] +  0.063 * (-1)**i, 
-                                    r_Hip[2] - 0.2442]), 
-                                    np.array([r_Hip[0], 
-                                    r_Hip[1] +  0.063 * (-1)**i, 
-                                    r_Hip[2] - 0.2442]) + r_o , 
-                                    t =0.2)
-                    
-                
-            self.actuate_joints(joints_angles)
-            t = t+1
-
 
