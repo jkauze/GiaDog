@@ -106,4 +106,97 @@ def foot_trajectories(
         target_foot_positions[i] = r + xyz_residual
     
     return target_foot_positions, FTG_frequencies, FTG_phases
+
+
+
+def FTG_debug(sigma_i_0: float, t: float, f_i: float, f_0 :float= 6
+                ) -> Tuple[np.array, float]:
+    """
+        Generates a vector in R^3 representing the desired foot position (end 
+        efector) in the H_i frame corresponding to the robots i-th leg 
+        horizontal frame below its hip.
+        
+        Arguments:
+        ----------
+            sigma_i_0 : float 
+                Contact phase.
+
+            t  : float 
+                Timestep.
+
+            f_i: float 
+                i-th leg frequency offset (from NN policy).
+            
+        Returns:
+        -------
+            numpy.ndarray, shape (3,) 
+                Vector expresed in the i-th leg horizontal frame Hi,
+                representing the target foot position.
+
+            float
+                FTG frequency. This output is used as an input of the neural 
+                network
+    """
+
+    sigma_i = (sigma_i_0 + t * (f_0 + f_i)) % (2 * np.pi)
+    k = 2 * (sigma_i - np.pi) / np.pi
+    param = 0 # 0.5
     
+    if 0 < k < 1: 
+        position = (H * (-2 * k ** 3 + 3 * k ** 2) - param) * H_Z
+    elif 1 < k < 2: 
+        position = (H * (2 * k ** 3 - 9 * k ** 2 + 12 * k - 4) - param) * H_Z
+    else: 
+        position = - param * H_Z
+
+    return position, sigma_i
+
+def foot_trajectories_debug(
+        theta: np.array, 
+        t: float,
+        sigma_0: np.array = np.array([0,0,0,0]),
+        f_0: float = 6,
+    ) -> Tuple[np.array, np.array, np.array]:
+    """
+        Processes the NN output theta and outputs the desired foot position in 
+        the H_i frame corresponding to the robots i-th leg horizontal frame
+        below its hip, the function also outputs the FTG_frequencies and 
+        FTG_phases of each leg.
+
+        Arguments:
+        ----------
+            theta: numpy.array, shape(16,)
+                Output of the NN
+
+            t: float
+                Timestep of the simulation (in seconds).
+
+            sigma_0: numpy.array, shape(4,)
+                Base foot phases.
+
+        Returns:
+        -------
+            numpy.array, shape(4,3)
+                Desired foot positions in the H_i frame corresponding to the 
+                robots i-th leg horizontal frame below its hip.
+            
+            numpy.array, shape(4,)
+                Foot Trajectory Generator frequencies of each leg.
+            
+            numpy.array, shape(4,)
+                Foot Trajectory Generator phases of each leg.
+    """
+    target_foot_positions = np.zeros([4,3])
+    FTG_frequencies = np.zeros([4])
+    FTG_phases = np.zeros([4,2])
+    
+    for i in range(4):
+        xyz_residual = theta[i : i+3]
+        f_i = theta[i + 3]
+        r, sigma_i = FTG_debug(sigma_0[i], t, f_i, f_0 = f_0)
+
+        FTG_frequencies[i] = sigma_i
+        FTG_phases[i] = [np.sin(sigma_i), np.cos(sigma_i)]
+        target_foot_positions[i] = r + xyz_residual
+    
+    return target_foot_positions, FTG_frequencies, FTG_phases

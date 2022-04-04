@@ -8,11 +8,11 @@
 # Utilities
 import numpy as np
 from typing import *
-from time import sleep
+from time import sleep, time
 from terrain_gen import *
 from __env__ import MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
     TOES_IDS, EXTERNAL_FORCE_MAGN, JOINTS_IDS, THIGHS_IDS, SHANKS_IDS, \
-    HIPS_IDS, EXTERNAL_FORCE_TIME, ROWS, COLS
+    HIPS_IDS, EXTERNAL_FORCE_TIME, ROWS, COLS 
 
 # Simulacion
 import pybullet as p
@@ -175,6 +175,8 @@ class Simulation(object):
                     [TODO]
                     Default: False
         """
+        # Set the gravity vector
+        self.p.setGravity(*self.gravity_vector)
         # Create terrain object
         terrain_shape = self.p.createCollisionShape(
             shapeType = self.p.GEOM_HEIGHTFIELD, 
@@ -184,7 +186,7 @@ class Simulation(object):
         )
         self.terrain = self.p.createMultiBody(0, terrain_shape)
         self.p.resetBasePositionAndOrientation(self.terrain, [0,0,0], [0,0,0,1])
-        self.p.setGravity(*self.gravity_vector)
+        
 
         # Get difference between terrain array and real terrain
         ray_info = self.p.rayTest((0, 0, -50),(0, 0, 50))[0]
@@ -225,11 +227,13 @@ class Simulation(object):
                 jointIndex   = toe_id,
                 enableSensor = True,
             )
-
+        
         # Set random external force
         self.__set_external_force()
         self.external_force_applied = False
         self.timestep = 0.0
+
+        
 
     def __apply_force(self, F: List[float]):
         """
@@ -1451,6 +1455,108 @@ class Simulation(object):
                     point[1]
                 )
 
+    def test_FTG_beta(self, first_exec: bool=False):
+
+        """
+        Tesitng function to test the controller's Foot Trajectory Generator.
+
+        Arguments
+        ----------
+        first_exec: bool -> if True, the parameters are initialized.
+
+        Return
+        ------
+        None
+        """
+
+        # We create a constraint to keep the quadruped over the ground
+        if first_exec:
+            # Force parameters
+            self.phase_leg_1 = self.p.addUserDebugParameter(
+                'Leg 1', 
+                *(0, 2*np.pi, 0)
+            )
+            self.phase_leg_2 = self.p.addUserDebugParameter(
+                'Leg 2', 
+                 *(0, 2*np.pi, 0)
+            )
+            self.phase_leg_3 = self.p.addUserDebugParameter(
+                'Leg 3', 
+                *(0, 2*np.pi, 0)
+            )
+            self.phase_leg_4 = self.p.addUserDebugParameter(
+                'Leg 4', 
+                 *(0, 2*np.pi, 0)
+            )
+            self.base_frequency = self.p.addUserDebugParameter(
+                'Base frequency',
+                *(0, 16, 2.5))
+
+            self.reset_id = self.p.addUserDebugParameter('Reset', 1, 0, 0)
+            self.reset_count = 0
+            self.t = 0
+        
+        sigma_0 = np.array([self.p.readUserDebugParameter(self.phase_leg_1), 
+                            self.p.readUserDebugParameter(self.phase_leg_2), 
+                            self.p.readUserDebugParameter(self.phase_leg_3), 
+                            self.p.readUserDebugParameter(self.phase_leg_4)])
+        base_frequency = self.p.readUserDebugParameter(self.base_frequency)
+        line_colors = [
+            (0,0,1),#blue
+            (0,1,0),#green
+            (1,0,0),#red
+            (1,1,1),#white
+        ] 
+
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            # Reset robot position
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                (0,0,0.5),
+                (0,0,0,1)
+            )
+            
+            
+        self.joints_angles = []
+        nn_output = [0]*16
+        target_foot_positions, FTG_frequencies, FTG_phases = \
+                foot_trajectories_debug(nn_output, self.timestep,
+                                            sigma_0 = sigma_0,
+                                            f_0=base_frequency)
+        T_list = transformations_matrices(self.base_rpy)
+        
+        for i in range(4):
+            r_Hip = np.array(self.p.getLinkState(self.quadruped, 
+                    HIPS_IDS[i])[4])
+            
+            r_o = target_foot_positions[i]
+            T = T_list[i]
+            
+            r = T @ np.concatenate((r_o, [1]), axis = 0)
+            r = r[:3]
+            if i%2==0:
+                leg_angles = solve_leg_IK("LEFT", r)
+            else:
+                leg_angles = solve_leg_IK("RIGHT", r)
+            
+            self.joints_angles += list(leg_angles)
+
+            # debug
+            
+            self.trace_line(
+                            np.array([r_Hip[0], 
+                            r_Hip[1] +  0.063 * (-1)**i, 
+                            r_Hip[2] - 0.2442]), 
+                            np.array([r_Hip[0], 
+                            r_Hip[1] +  0.063 * (-1)**i, 
+                            r_Hip[2] - 0.2442]) + r_o , 
+                            t =40,
+                            color = line_colors[i])
+            
+        self.actuate_joints(self.joints_angles)
+
+        
     def test(self, test_function: Callable):
         """
             Function to run a test.
@@ -1462,16 +1568,23 @@ class Simulation(object):
                 test_function: Callable
                     Test function to run, each timestep.
         """
-        self.p.stepSimulation()
+        # Set real time mode
+        t_o = time() 
+        self.p.setRealTimeSimulation(1)
         self.update_sensor_output()
         test_function(True)
-        sleep(1/240)
+        self.timestep += time() -  t_o  
+        
+        
 
         while True:
-            self.p.stepSimulation()
+            t_o = time()
             self.update_sensor_output()
             test_function()
-            sleep(1/240)
+            self.timestep += time() -  t_o  
+            
+            
+            
 
     # ========================= DEBUGGING FUNCTIONS ========================= #
     def set_toes_friction_coefficients(self, friction_coefficient: float):
@@ -1644,7 +1757,7 @@ class Simulation(object):
             print("Shank Lenght", lw)
             print(np.array(toe_position) - np.array(hip_position))
 
-    def trace_line(self, r_o, r_f, t = 4):    
+    def trace_line(self, r_o, r_f, t = 4, color = (1, 0, 0)):    
         """
         Debbuging function to visualize a line between two points in the 
         simulation.
@@ -1661,7 +1774,7 @@ class Simulation(object):
         """
         self.p.addUserDebugLine(r_o,     
                                 r_f,
-                                (1, 0, 0), 
+                                color, 
                                 lifeTime = t)
         
     def meassure_distance(self, r_o, r_f, t=0):
@@ -1692,7 +1805,7 @@ class Simulation(object):
                                 lifeTime = t)
 
 
-    # =========================== TESTING FUNCTIONS =========================== #
+    # =========================== TESTING FUNCTIONS ========================== #
     def test_sensors(self):
         """ 
         Generates a simulation to test the robot's sensors.
