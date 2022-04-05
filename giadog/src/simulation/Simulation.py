@@ -1541,8 +1541,8 @@ class Simulation(object):
             
             self.joints_angles += list(leg_angles)
 
-            # debug
             
+            # Trace lines where the feet are
             self.trace_line(
                             np.array([r_Hip[0], 
                             r_Hip[1] +  0.063 * (-1)**i, 
@@ -1555,7 +1555,95 @@ class Simulation(object):
             
         self.actuate_joints(self.joints_angles)
 
+
+    def test_IK(self, first_exec: bool=False):
+        """
         
+        """
+
+        if first_exec:
+            # We draw the H_i frames below the robot hips
+            for i in range(4):
+                r_Hip = np.array(self.p.getLinkState(self.quadruped,
+                    HIPS_IDS[i])[4]) 
+                pos = np.array([r_Hip[0], 
+                                r_Hip[1] +  0.063 * (-1)**i, 
+                                r_Hip[2] - 0.2442])
+                Rot = np.eye(3)
+                self.draw_reference_frame(Rot, pos)
+        
+            self.x_pos_param = self.p.addUserDebugParameter(
+                'x', 
+                *(-0.2, 0.2, 0)
+            )
+            self.y_pos_param = self.p.addUserDebugParameter(
+                'y', 
+                 *(-0.2, 0.2, 0)
+            )
+            self.z_pos_param = self.p.addUserDebugParameter(
+                'z', 
+                *(-0.2, 0.2, 0)
+            )
+
+            self.leg_1 = self.p.addUserDebugParameter('Leg 1', 1, 0, 0)
+            self.leg_2 = self.p.addUserDebugParameter('Leg 2', 1, 0, 0)
+            self.leg_3 = self.p.addUserDebugParameter('Leg 3', 1, 0, 0)
+            self.leg_4 = self.p.addUserDebugParameter('Leg 4', 1, 0, 0)
+            self.leg_1_count = 0
+            self.leg_2_count = 0
+            self.leg_3_count = 0
+            self.leg_4_count = 0
+
+            self.objective_joint_angles = self.joint_angles
+    
+        x_pos = self.p.readUserDebugParameter(self.x_pos_param)
+        y_pos = self.p.readUserDebugParameter(self.y_pos_param)
+        z_pos = self.p.readUserDebugParameter(self.z_pos_param)
+
+        r = np.array([x_pos, y_pos, z_pos])
+
+        T_list = self.transf_matrices
+        
+        if self.leg_1_count != self.p.readUserDebugParameter(self.leg_1):
+            self.objective_joint_angles = self.joint_angles.copy()
+            T = T_list[0]
+            r = T @ np.concatenate((r, [1]), axis = 0)
+            r = r[:3]
+            leg_angles = solve_leg_IK("LEFT", r)
+            self.leg_1_count = self.p.readUserDebugParameter(self.leg_1)
+            self.objective_joint_angles[0:3] = leg_angles
+        
+        if self.leg_2_count != self.p.readUserDebugParameter(self.leg_2):
+            self.objective_joint_angles = self.joint_angles.copy()
+            T = T_list[1]
+            r = T @ np.concatenate((r, [1]), axis = 0)
+            r = r[:3]
+            leg_angles = solve_leg_IK("RIGHT", r)
+            self.objective_joint_angles[3:6] = leg_angles
+            self.leg_2_count = self.p.readUserDebugParameter(self.leg_2)
+        
+        if self.leg_3_count != self.p.readUserDebugParameter(self.leg_3):
+            self.objective_joint_angles = self.joint_angles.copy()
+            T = T_list[2]
+            r = T @ np.concatenate((r, [1]), axis = 0)
+            r = r[:3]
+            leg_angles = solve_leg_IK("LEFT", r)
+            self.objective_joint_angles[6:9] = leg_angles
+            self.leg_3_count = self.p.readUserDebugParameter(self.leg_3)
+
+        if self.leg_4_count != self.p.readUserDebugParameter(self.leg_4):
+            self.objective_joint_angles = self.joint_angles.copy()
+            T = T_list[3]
+            r = T @ np.concatenate((r, [1]), axis = 0)
+            r = r[:3]
+            leg_angles = solve_leg_IK("RIGHT", r)
+            self.objective_joint_angles[9:12] = leg_angles
+            self.leg_4_count = self.p.readUserDebugParameter(self.leg_4)
+
+
+        self.actuate_joints(self.objective_joint_angles)
+            
+
     def test(self, test_function: Callable):
         """
             Function to run a test.
@@ -1573,8 +1661,14 @@ class Simulation(object):
         self.update_sensor_output()
         test_function(True)
         self.timestep += time() -  t_o  
-        
-        
+
+        self.p.addUserDebugLine(
+            lineFromXYZ = [0,0,0],
+            lineToXYZ =  [0,0,1],
+            lineColorRGB = [0,0,1],
+            lineWidth = 4,
+            lifeTime = 0
+        ) 
 
         while True:
             t_o = time()
