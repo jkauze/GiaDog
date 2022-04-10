@@ -505,11 +505,12 @@ class GiadogEnv(gym.Env):
             ('joint_err_hist'   , np.array(self.joint_err_hist  , dtype=np.float32)),
             ('joint_vel_hist'   , np.array(self.joint_vel_hist  , dtype=np.float32)),
             ('feet_target_hist' , np.array(self.feet_target_hist, dtype=np.float32)),
+            
+            # Priviliged Data
             ('toes_contact'     , np.array(self.toes_contact    , dtype=np.int8)),
             ('thighs_contact'   , np.array(self.thighs_contact  , dtype=np.int8)),
             ('shanks_contact'   , np.array(self.shanks_contact  , dtype=np.int8)),
 
-            # Priviliged Data
             ('normal_foot'    , np.array(self.normal_toe     , dtype=np.float32)), 
             ('height_scan'    , np.array(self.height_scan    , dtype=np.float32)), 
             ('foot_forces'    , np.array(self.toes_force1    , dtype=np.float32)), 

@@ -13,7 +13,7 @@ from typing import List, Tuple, Callable
 from terrain_gen import steps, set_goal, save_terrain
 from __env__ import MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
     TOES_IDS, EXTERNAL_FORCE_MAGN, JOINTS_IDS, THIGHS_IDS, SHANKS_IDS, \
-    HIPS_IDS, EXTERNAL_FORCE_TIME, ROWS, COLS
+    HIPS_IDS, EXTERNAL_FORCE_TIME, ROWS, COLS 
 
 # Simulacion
 import pybullet as p
@@ -118,7 +118,6 @@ class Simulation(object):
         self.external_force  = np.zeros([3])
 
         # Other data
-        self.base_rpy         = np.zeros([3]) # TODO
         self.transf_matrices  = np.zeros([4,4,4])
         self.joint_torques    = np.zeros([12])
         self.is_fallen        = False
@@ -189,6 +188,8 @@ class Simulation(object):
                     [TODO]
                     Default: False
         """
+        # Set the gravity vector
+        self.p.setGravity(*self.gravity_vector)
         # Create terrain object
         terrain_shape = self.p.createCollisionShape(
             shapeType = self.p.GEOM_HEIGHTFIELD, 
@@ -198,7 +199,7 @@ class Simulation(object):
         )
         self.terrain = self.p.createMultiBody(0, terrain_shape)
         self.p.resetBasePositionAndOrientation(self.terrain, [0,0,0], [0,0,0,1])
-        self.p.setGravity(*self.gravity_vector)
+        
 
         # Get difference between terrain array and real terrain
         ray_info = self.p.rayTest((0, 0, -50),(0, 0, 50))[0]
@@ -239,10 +240,12 @@ class Simulation(object):
                 jointIndex   = toe_id,
                 enableSensor = True,
             )
-
+        
         # Set random external force
         self.__set_external_force()
         self.external_force_applied = False
+
+        
 
     def __apply_force(self, F: List[float]):
         """
@@ -574,7 +577,7 @@ class Simulation(object):
         """
             Update the transformation matrices from the hip to the leg base.
         """
-        self.transf_matrices = transformations_matrices(self.base_rpy)
+        self.transf_matrices = transformations_matrices(self.orientation)
 
     def update_is_fallen(self):
         """
@@ -1474,6 +1477,196 @@ class Simulation(object):
                     point[1]
                 )
 
+    def test_FTG(self, first_exec: bool=False):
+
+        """
+        Tesitng function to test the controller's Foot Trajectory Generator.
+
+        Arguments
+        ----------
+        first_exec: bool -> if True, the parameters are initialized.
+
+        Return
+        ------
+        None
+        """
+
+        # We create a constraint to keep the quadruped over the ground
+        if first_exec:
+            # Force parameters
+            self.phase_leg_1 = self.p.addUserDebugParameter(
+                'Leg 1', 
+                *(0, 2*np.pi, 0)
+            )
+            self.phase_leg_2 = self.p.addUserDebugParameter(
+                'Leg 2', 
+                 *(0, 2*np.pi, 0)
+            )
+            self.phase_leg_3 = self.p.addUserDebugParameter(
+                'Leg 3', 
+                *(0, 2*np.pi, 0)
+            )
+            self.phase_leg_4 = self.p.addUserDebugParameter(
+                'Leg 4', 
+                 *(0, 2*np.pi, 0)
+            )
+            self.base_frequency = self.p.addUserDebugParameter(
+                'Base frequency',
+                *(0, 16, 2.5))
+
+            self.reset_id = self.p.addUserDebugParameter('Reset', 1, 0, 0)
+            self.reset_count = 0
+            self.t = 0
+        
+        sigma_0 = np.array([self.p.readUserDebugParameter(self.phase_leg_1), 
+                            self.p.readUserDebugParameter(self.phase_leg_2), 
+                            self.p.readUserDebugParameter(self.phase_leg_3), 
+                            self.p.readUserDebugParameter(self.phase_leg_4)])
+        base_frequency = self.p.readUserDebugParameter(self.base_frequency)
+        line_colors = [
+            (0,0,1),#blue
+            (0,1,0),#green
+            (1,0,0),#red
+            (1,1,1),#white
+        ] 
+
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            # Reset robot position
+            self.p.resetBasePositionAndOrientation(
+                self.quadruped,
+                (0,0,0.5),
+                (0,0,0,1)
+            )
+            
+            
+        self.joints_angles = []
+        nn_output = [0]*16
+        target_foot_positions, FTG_frequencies, FTG_phases = \
+                foot_trajectories_debug(nn_output, self.timestep,
+                                            sigma_0 = sigma_0,
+                                            f_0=base_frequency)
+        T_list = transformations_matrices(self.orientation)
+        
+        for i in range(4):
+            r_Hip = np.array(self.p.getLinkState(self.quadruped, 
+                    HIPS_IDS[i])[4])
+            
+            r_o = target_foot_positions[i]
+            T = T_list[i]
+            
+            r = T @ np.concatenate((r_o, [1]), axis = 0)
+            r = r[:3]
+            if i%2==0:
+                leg_angles = solve_leg_IK("LEFT", r)
+            else:
+                leg_angles = solve_leg_IK("RIGHT", r)
+            
+            self.joints_angles += list(leg_angles)
+
+            
+            # Trace lines where the feet are
+            self.trace_line(
+                            np.array([r_Hip[0], 
+                            r_Hip[1] +  0.063 * (-1)**i, 
+                            r_Hip[2] - 0.2442]), 
+                            np.array([r_Hip[0], 
+                            r_Hip[1] +  0.063 * (-1)**i, 
+                            r_Hip[2] - 0.2442]) + r_o , 
+                            t =40,
+                            color = line_colors[i])
+            
+        self.actuate_joints(self.joints_angles)
+
+
+    def test_IK(self, first_exec: bool=False):
+        """
+        
+        """
+
+        if first_exec:
+            # We draw the H_i frames below the robot hips
+            for i in range(4):
+                r_Hip = np.array(self.p.getLinkState(self.quadruped,
+                    HIPS_IDS[i])[4]) 
+                pos = np.array([r_Hip[0], 
+                                r_Hip[1] +  0.063 * (-1)**i, 
+                                r_Hip[2] - 0.2442])
+                Rot = np.eye(3)
+                self.draw_reference_frame(Rot, pos)
+        
+            self.x_pos_param = self.p.addUserDebugParameter(
+                'x', 
+                *(-0.2, 0.2, 0)
+            )
+            self.y_pos_param = self.p.addUserDebugParameter(
+                'y', 
+                 *(-0.2, 0.2, 0)
+            )
+            self.z_pos_param = self.p.addUserDebugParameter(
+                'z', 
+                *(-0.2, 0.2, 0)
+            )
+
+            self.leg_1 = self.p.addUserDebugParameter('Leg 1', 1, 0, 0)
+            self.leg_2 = self.p.addUserDebugParameter('Leg 2', 1, 0, 0)
+            self.leg_3 = self.p.addUserDebugParameter('Leg 3', 1, 0, 0)
+            self.leg_4 = self.p.addUserDebugParameter('Leg 4', 1, 0, 0)
+            self.leg_1_count = 0
+            self.leg_2_count = 0
+            self.leg_3_count = 0
+            self.leg_4_count = 0
+
+            self.objective_joint_angles = self.joint_angles
+    
+        x_pos = self.p.readUserDebugParameter(self.x_pos_param)
+        y_pos = self.p.readUserDebugParameter(self.y_pos_param)
+        z_pos = self.p.readUserDebugParameter(self.z_pos_param)
+
+        r = np.array([x_pos, y_pos, z_pos])
+
+        T_list = self.transf_matrices
+        
+        if self.leg_1_count != self.p.readUserDebugParameter(self.leg_1):
+            self.objective_joint_angles = self.joint_angles.copy()
+            T = T_list[0]
+            r = T @ np.concatenate((r, [1]), axis = 0)
+            r = r[:3]
+            leg_angles = solve_leg_IK("LEFT", r)
+            self.leg_1_count = self.p.readUserDebugParameter(self.leg_1)
+            self.objective_joint_angles[0:3] = leg_angles
+        
+        if self.leg_2_count != self.p.readUserDebugParameter(self.leg_2):
+            self.objective_joint_angles = self.joint_angles.copy()
+            T = T_list[1]
+            r = T @ np.concatenate((r, [1]), axis = 0)
+            r = r[:3]
+            leg_angles = solve_leg_IK("RIGHT", r)
+            self.objective_joint_angles[3:6] = leg_angles
+            self.leg_2_count = self.p.readUserDebugParameter(self.leg_2)
+        
+        if self.leg_3_count != self.p.readUserDebugParameter(self.leg_3):
+            self.objective_joint_angles = self.joint_angles.copy()
+            T = T_list[2]
+            r = T @ np.concatenate((r, [1]), axis = 0)
+            r = r[:3]
+            leg_angles = solve_leg_IK("LEFT", r)
+            self.objective_joint_angles[6:9] = leg_angles
+            self.leg_3_count = self.p.readUserDebugParameter(self.leg_3)
+
+        if self.leg_4_count != self.p.readUserDebugParameter(self.leg_4):
+            self.objective_joint_angles = self.joint_angles.copy()
+            T = T_list[3]
+            r = T @ np.concatenate((r, [1]), axis = 0)
+            r = r[:3]
+            leg_angles = solve_leg_IK("RIGHT", r)
+            self.objective_joint_angles[9:12] = leg_angles
+            self.leg_4_count = self.p.readUserDebugParameter(self.leg_4)
+
+
+        self.actuate_joints(self.objective_joint_angles)
+            
+
     def test(self, test_function: Callable):
         """
             Function to run a test.
@@ -1666,7 +1859,7 @@ class Simulation(object):
             print("Shank Lenght", lw)
             print(np.array(toe_position) - np.array(hip_position))
 
-    def trace_line(self, r_o, r_f, t = 4):    
+    def trace_line(self, r_o, r_f, t = 4, color = (1, 0, 0)):    
         """
         Debbuging function to visualize a line between two points in the 
         simulation.
@@ -1683,7 +1876,7 @@ class Simulation(object):
         """
         self.p.addUserDebugLine(r_o,     
                                 r_f,
-                                (1, 0, 0), 
+                                color, 
                                 lifeTime = t)
         
     def meassure_distance(self, r_o, r_f, t=0):
@@ -1714,7 +1907,7 @@ class Simulation(object):
                                 lifeTime = t)
 
 
-    # =========================== TESTING FUNCTIONS =========================== #
+    # =========================== TESTING FUNCTIONS ========================== #
     def test_sensors(self):
         """ 
         Generates a simulation to test the robot's sensors.
@@ -1841,72 +2034,4 @@ class Simulation(object):
                 joint_target_positions += list(leg_angles)
             
             self.actuate_joints(joint_target_positions)
-
-    def test_FTG(self):
-
-        """
-        Tesitng function to test the controller's Foot Trajectory Generator.
-
-        Arguments
-        ----------
-        self :-> simulation object
-            The simulation object.
-
-        Return
-        ------
-        None
-        """
-
-        t = 0
-        # We create a constraint to keep the quadruped over the ground
-       
-        
-        
-        sigma_0 = np.array([0, np.pi/2, np.pi, 3*np.pi/2])
-        while True: 
-            self.p.stepSimulation()
-            self.update_sensor_output()
-            sleep(1/240) 
-            
-            # 
-            if t%5 == 0:
-                joints_angles = []
-                nn_output = [0]*16
-                target_foot_positions, FTG_frequencies, FTG_phases = \
-                        foot_trajectories(nn_output, t/240,
-                                                    sigma_0 = sigma_0,
-                                                    f_0=12)
-                T_list = transformations_matrices(self.base_rpy)
-                
-                for i in range(4):
-                    r_Hip = np.array(self.p.getLinkState(self.quadruped, 
-                            HIPS_IDS[i])[4])
-                    
-                    r_o = target_foot_positions[i]
-                    T = T_list[i]
-
-                    
-                    r = T @ np.concatenate((r_o, [1]), axis = 0)
-                    r = r[:3]
-                    if i%2==0:
-                        leg_angles = solve_leg_IK("LEFT", r)
-                    else:
-                        leg_angles = solve_leg_IK("RIGHT", r)
-                    
-                    joints_angles += list(leg_angles)
-
-                    # debug
-                    self.trace_line(
-                                    np.array([r_Hip[0], 
-                                    r_Hip[1] +  0.063 * (-1)**i, 
-                                    r_Hip[2] - 0.2442]), 
-                                    np.array([r_Hip[0], 
-                                    r_Hip[1] +  0.063 * (-1)**i, 
-                                    r_Hip[2] - 0.2442]) + r_o , 
-                                    t =0.2)
-                    
-                
-            self.actuate_joints(joints_angles)
-            t = t+1
-
 
