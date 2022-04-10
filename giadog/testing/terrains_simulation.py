@@ -5,8 +5,7 @@ import pathlib
 import argparse
 from uuid import uuid4
 from random import randint
-from src.simulation.Simulation import *
-from src.simulation.terrain_gen import *
+from src.simulation import Simulation, hills, steps, stairs, save_terrain
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

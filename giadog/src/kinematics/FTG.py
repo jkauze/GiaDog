@@ -17,7 +17,7 @@
 
 """
 import numpy as np
-from typing import *
+from typing import Tuple
 from __env__ import F_0, H, H_Z, SIGMA_0
 
 def FTG(sigma_i_0: float, t: float, f_i: float) -> Tuple[np.array, float]:

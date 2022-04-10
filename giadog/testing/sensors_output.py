@@ -3,8 +3,7 @@ sys.path.append(os.path.dirname(os.path.realpath(f'{__file__}/..')))
 
 import pathlib
 import argparse
-from src.__env__ import TERRAIN_FILE
-from src.simulation.Simulation import *
+from src.simulation import Simulation
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -19,6 +18,13 @@ if __name__ == '__main__':
             '/mini_ros/urdf/spot.urdf',
         help='Path to the URDF file of the quadruped robot.',
         metavar='PATH'
+    )
+    parser.add_argument(
+        '-r', '--real-step',
+        action='store_const',
+        default=False, 
+        const=True, 
+        help='',
     )
     parser.add_argument(
         '-s', '---sensor',
@@ -40,7 +46,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    sim = Simulation(args.spot_urdf, gui=True)
+    sim = Simulation(args.spot_urdf, gui=True, real_step=args.real_step)
     
     if args.sensor == 'position-orientation': 
         sim.reset('terrains/initial_hills.txt')

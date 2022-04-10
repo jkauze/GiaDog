@@ -1,8 +1,9 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.realpath(f'{__file__}/..')))
 
-from src.simulation.terrain_gen import *
 import argparse
+from random import randint
+from src.simulation import hills, steps, stairs, plot_terrain
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

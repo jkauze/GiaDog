@@ -236,7 +236,7 @@ def set_goal(terrain: np.array, height: float) -> Tuple[int, int]:
     col = int(radio * (1 + np.sin(angle)))
 
     # Set the goal
-    __goal(terrain, row, col, height)
+    #__goal(terrain, row, col, height)
 
     return (row, col)
 

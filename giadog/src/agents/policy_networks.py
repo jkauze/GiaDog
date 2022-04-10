@@ -3,9 +3,10 @@ from typing import *
 
 # Machine Learning
 import numpy as np
-from Network import *
+from ANN import ANN
 from gym import spaces
-from Distribution import *
+import tensorflow as tf
+from distributions import DiagGaussian
 from tensorflow import keras, clip_by_value
 from __env__ import PRIVILIGED_DATA, NON_PRIVILIGED_DATA, \
     PRIVILIGED_DATA_SHAPE, NON_PRIVILIGED_DATA_SHAPE, CLASSIFIER_INPUT_SHAPE
@@ -71,9 +72,9 @@ class VariableLayer(keras.layers.Layer):
         """
         return self.bias
 
-class TeacherNetwork(Network):
+class TeacherANN(ANN):
     """
-        Teacher policy network class.
+        Teacher policy ANN class.
 
     """
     def __init__(
@@ -82,7 +83,7 @@ class TeacherNetwork(Network):
             observation_space: spaces.Dict
         ):
         """
-            Initializes the teacher network.
+            Initializes the teacher ANN.
 
             Arguments:
             ----------
@@ -104,7 +105,7 @@ class TeacherNetwork(Network):
             np.ones((16,))
         )
 
-        # Subnetwork that processes the privileged data
+        # SubANN that processes the privileged data
         inputs_x_t = keras.Input(
             shape=PRIVILIGED_DATA_SHAPE, 
             name='priviliged_data'
@@ -113,14 +114,14 @@ class TeacherNetwork(Network):
         x_t = keras.layers.Dense(64, activation='tanh')(x_t)
         self.encoder = keras.Model(inputs_x_t, x_t, name='encoder')
 
-        # Concatenate the output of the previous network with the 
+        # Concatenate the output of the previous ANN with the 
         # non-privileged data
         inputs_o_t = keras.Input(
             shape=NON_PRIVILIGED_DATA_SHAPE,
             name='non_priviliged_data')
         concat = keras.layers.Concatenate()([inputs_o_t, x_t])
 
-        # Classifier subnetwork
+        # Classifier subANN
         inputs_c = keras.Input(shape=CLASSIFIER_INPUT_SHAPE)
         x = keras.layers.Dense(256, activation='tanh')(inputs_c)
         x = keras.layers.Dense(128, activation='tanh')(x)
@@ -128,12 +129,12 @@ class TeacherNetwork(Network):
         outputs_c = keras.layers.Dense(16)(x)
         self.classifier = keras.Model(inputs_c, outputs_c, name='classifier')
 
-        # Mean network
+        # Mean ANN
         mean = self.classifier(concat)
         # Log std (for the Gaussian distribution)
         log_std = VariableLayer(self.policy_dist.ndim)([inputs_x_t, inputs_o_t])
 
-        # Full network
+        # Full ANN
         self.model = keras.Model(
             inputs = [inputs_x_t, inputs_o_t], 
             outputs = [mean, log_std]
@@ -181,7 +182,7 @@ class TeacherNetwork(Network):
                 np.array, shape (16,)
                     The action to be taken.
         """
-        # Get network input
+        # Get ANN input
         assert self.verify_states(states)
         input_x_t, input_o_t = self.__format_states(states)
         
@@ -199,5 +200,5 @@ class TeacherNetwork(Network):
 
         return result
 
-class StudentNetwork(Network):
+class StudentANN(ANN):
     pass

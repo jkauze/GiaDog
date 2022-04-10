@@ -1,6 +1,6 @@
 import json
 import numpy as np
-from typing import *
+from typing import List
 
 # Cargamos las variables de entorno
 with open('.env.json', 'r') as f:
@@ -81,6 +81,7 @@ GAMMA                : float = TRAIN["GAMMA"]
 BACKTRACK_COEFF      : float = TRAIN["BACKTRACK_COEFF"]
 ACTOR_PATH           : str   = TRAIN["ACTOR_PATH"]
 CRITIC_PATH          : str   = TRAIN["CRITIC_PATH"]
+ARS_PATH             : str   = TRAIN["ARS_PATH"]
 
 HILLS_RANGE      = ENV["HILLS_RANGE"]
 STEPS_RANGE      = ENV["STEPS_RANGE"]

@@ -5,7 +5,7 @@
     [TODO: DESCRIPTION]
 """
 import numpy as np
-from typing import *
+from typing import List
 from __env__ import H_OFF, LEG_SPAN
 
 

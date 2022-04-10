@@ -6,19 +6,20 @@
 """
 
 # Utilities
+import os
 import numpy as np
-from typing import *
-from time import sleep
-from terrain_gen import *
+from time import sleep, time
+from typing import List, Tuple, Callable
+from terrain_gen import steps, set_goal, save_terrain
 from __env__ import MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
     TOES_IDS, EXTERNAL_FORCE_MAGN, JOINTS_IDS, THIGHS_IDS, SHANKS_IDS, \
     HIPS_IDS, EXTERNAL_FORCE_TIME, ROWS, COLS
 
 # Simulacion
 import pybullet as p
-from kinematics import *
-from bullet_dataclasses import *
 import pybullet_utils.bullet_client as bc
+from bullet_dataclasses import ContactInfo, JointState, LinkState
+from kinematics import foot_trajectories, solve_leg_IK, transformations_matrices
 
 
 class Simulation(object):
@@ -27,6 +28,7 @@ class Simulation(object):
             self,
             giadog_urdf_file: str,
             gui: bool=False,
+            real_step: bool=False,
             self_collision_enabled: bool=False,
         ): 
         """
@@ -39,6 +41,8 @@ class Simulation(object):
                     Indicates if the simulation GUI will be displayed.
                     Default: False
 
+                real_step: bool, optional
+
                 self_collision_enabled: bool, optional
                     TODO
                     Default: False
@@ -46,7 +50,14 @@ class Simulation(object):
         self.giadog_urdf_file = giadog_urdf_file
         self.gui = gui
         self.p = bc.BulletClient(connection_mode=p.GUI if gui else p.DIRECT)
-        self.p.setTimeStep(SIM_SECONDS_PER_STEP)
+
+        self.real_step = real_step
+        self.initial_time = time() 
+        self.timestep = self.initial_time
+
+        if real_step: self.p.setRealTimeSimulation(1)
+        else: self.p.setTimeStep(SIM_SECONDS_PER_STEP)
+
         self.self_collision_enabled = self_collision_enabled
         self.__reset_state()
 
@@ -114,6 +125,9 @@ class Simulation(object):
 
         # For debug
         self.height_scan_lines = np.zeros([4,9,2,3])
+
+        self.initial_time = time() 
+        self.timestep = self.initial_time
 
     @staticmethod
     def __foot_scan_coordinates(x: float, y: float, alpha: float) -> np.array:
@@ -229,7 +243,6 @@ class Simulation(object):
         # Set random external force
         self.__set_external_force()
         self.external_force_applied = False
-        self.timestep = 0.0
 
     def __apply_force(self, F: List[float]):
         """
@@ -273,6 +286,13 @@ class Simulation(object):
         ])
 
         self.external_force = force_norm * force_module
+
+    def set_goal(self, x: float, y: float):
+        """
+            [TODO]
+        """
+        z = self.__terrain_height(x, y)
+        return self.__create_ball(np.array([x,y,z]), 0.1)
 
     def reset(
             self, 
@@ -406,8 +426,11 @@ class Simulation(object):
         """
             Next frame in the simulation.
         """
-        self.p.stepSimulation()
-        self.timestep += SIM_SECONDS_PER_STEP
+        if self.real_step:
+            self.timestep = time() - self.initial_time
+        else:
+            self.p.stepSimulation()
+            self.timestep += SIM_SECONDS_PER_STEP
 
     def update_position_orientation(self):
         """
@@ -1164,8 +1187,8 @@ class Simulation(object):
                 self.p.resetJointState(self.quadruped, ID, 0)
 
         # Apply forces
-        if self.current_go_up: self.__apply_force([0, 0, 100])
-        elif self.current_go_down: self.__apply_force([0, 0, -70])
+        if self.current_go_up: self.__apply_force([0, 0, 150])
+        elif self.current_go_down: self.__apply_force([0, 0, -50])
 
         print(f'TOES CONTACT: {self.toes_contact}')
 
@@ -1394,11 +1417,11 @@ class Simulation(object):
             # Force parameters
             self.vel_x_id = self.p.addUserDebugParameter(
                 'Velocity X', 
-                *(-0.1, 0.1, 0)
+                *(-1, 1, 0)
             )
             self.vel_y_id = self.p.addUserDebugParameter(
                 'Velocity Y', 
-                *(-0.1, 0.1, 0)
+                *(-1, 1, 0)
             )
 
             # Rese state
@@ -1441,8 +1464,8 @@ class Simulation(object):
             [self.pos_x, self.pos_y, 0.5]
         )
 
-        self.pos_x += self.p.readUserDebugParameter(self.vel_x_id)
-        self.pos_y += self.p.readUserDebugParameter(self.vel_y_id)
+        self.pos_x += self.p.readUserDebugParameter(self.vel_x_id) / 200
+        self.pos_y += self.p.readUserDebugParameter(self.vel_y_id) / 200
 
         for i, points in enumerate(self.height_scan_lines): 
             for j, point in enumerate(points):
@@ -1462,16 +1485,15 @@ class Simulation(object):
                 test_function: Callable
                     Test function to run, each timestep.
         """
-        self.p.stepSimulation()
+        # Update simulation
+        self.step()
         self.update_sensor_output()
         test_function(True)
-        sleep(1/240)
 
         while True:
-            self.p.stepSimulation()
+            self.step()
             self.update_sensor_output()
-            test_function()
-            sleep(1/240)
+            test_function(False)
 
     # ========================= DEBUGGING FUNCTIONS ========================= #
     def set_toes_friction_coefficients(self, friction_coefficient: float):

@@ -2,14 +2,11 @@
 import json
 import pathlib
 import argparse
-from time import time, sleep
-from src.training.GiadogGym import *
-from src.training.TerrainCurriculum import *
+from src.simulation import Simulation
+from src.training import GiadogEnv, TerrainCurriculum
 try: import rospy
 except: pass
 
-from src.agents import *
-from src.simulation import *
 
 
 # Cargamos las variables de entorno
@@ -24,46 +21,6 @@ TERRAIN_FILE          = ENV["SIMULATION"]["TERRAIN_FILE"]
 STEPS_PER_REAL_SECOND = ENV["SIMULATION"]["STEPS_PER_REAL_SECOND"]
 SIM_SECONDS_PER_STEP  = ENV["SIMULATION"]["SIM_SECONDS_PER_STEP"]
 MAX_ITERATION_TIME    = ENV["TRAIN"]["MAX_ITERATION_TIME"]
-
-
-class Rate(object):
-    """
-        Convenience class for sleeping in a loop at a specified rate
-
-        References:
-        -----------
-            * https://github.com/strawlab/ros_comm/blob/master/clients/rospy/src/rospy/timer.py
-    """
-    
-    def __init__(self, hz: int):
-        """
-            Parameters:
-            -----------
-                * hz: int
-                    Rate to determine sleeping
-        """
-        self.last_time = time()
-        self.sleep_dur = 1 / hz
-
-    def sleep(self):
-        """
-            Attempt sleep at the specified rate. sleep() takes into account the time 
-            elapsed since the last successful sleep().
-        """
-        curr_time = time()
-
-        # Detect time jumping backwards
-        if self.last_time > curr_time:
-            self.last_time = curr_time
-
-        # Calculate sleep interval
-        elapsed = curr_time - self.last_time
-        sleep(max(0, self.sleep_dur - elapsed))
-        self.last_time = self.last_time + self.sleep_dur
-
-        # Detect time jumping forwards, as well as loops that are inherently too slow
-        if curr_time - self.last_time > self.sleep_dur * 2:
-            self.last_time = curr_time
 
 
 if __name__ == '__main__':
@@ -90,7 +47,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '-m', '---method',
-        choices=['TRPO', 'PPO'],
+        choices=['TRPO', 'PPO', 'ARS'],
         default='TRPO',
         help='Training method.',
         metavar='METHOD'
@@ -129,7 +86,7 @@ if __name__ == '__main__':
     if args.ros:
         rospy.init_node('train', anonymous=True)
         sim = None 
-        train_envs = [TeacherEnv(sim)]
+        train_envs = [GiadogEnv(sim)]
 
     else:
         # Initialize simulation
@@ -139,7 +96,7 @@ if __name__ == '__main__':
         for _ in range(args.threads):
             sim = Simulation(args.spot_urdf, gui=args.gui)
             sim.p.setTimeStep(SIM_SECONDS_PER_STEP)
-            train_envs.append(TeacherEnv(sim))
+            train_envs.append(GiadogEnv(sim))
 
     tc = TerrainCurriculum(train_envs, args.method, args.resume)
     tc.train()

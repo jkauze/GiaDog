@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import *
+from typing import List, Optional
 
 @dataclass
 class Joint:

@@ -2,7 +2,5 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 sys.path.append(os.path.dirname(os.path.realpath(f'{__file__}/..')))
 
-from PPO import *
-from TRPO import *
-from GiadogGym import *
-from TerrainCurriculum import *
+from GiadogEnv import GiadogEnv
+from TerrainCurriculum import TerrainCurriculum

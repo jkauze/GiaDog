@@ -15,7 +15,7 @@
         https://github.com/OpenQuadruped/spot_mini_mini/blob/spot/spotmicro/Kinematics/LegKinematics.py
 """
 import numpy as np
-from typing import *
+from typing import Tuple
 from __env__ import H_OFF, V_OFF, SHANK_L, THIGH_L
 
 

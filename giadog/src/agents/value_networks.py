@@ -6,20 +6,20 @@
 
 """
 import numpy as np
+from ANN import ANN
 from typing import *
 from gym import spaces
 import tensorflow as tf
-from agents.Network import *
 from tensorflow import keras
 from __env__ import PRIVILIGED_DATA, NON_PRIVILIGED_DATA, \
     PRIVILIGED_DATA_SHAPE, NON_PRIVILIGED_DATA_SHAPE
 
-class TeacherValueNetwork(Network):
-    """ Teacher value network class. """
+class TeacherValueANN(ANN):
+    """ Teacher value ANN class. """
     
     def __init__(self, observation_space: spaces.Dict):
         """
-            Initializes the teacher value network.
+            Initializes the teacher value ANN.
 
             Arguments:
             ----------
@@ -48,7 +48,7 @@ class TeacherValueNetwork(Network):
         self.model = keras.Model(
             inputs= [inputs_x_t, inputs_o_t], 
             outputs=outputs, 
-            name='value network'
+            name='value ANN'
         )
 
     def __format_states(
@@ -84,11 +84,11 @@ class TeacherValueNetwork(Network):
                 tensorf.Tensor
                     Value computed
         """
-        # Get network input
+        # Get ANN input
         assert self.verify_states(states)
         input_x_t, input_o_t = self.__format_states(states)
 
         return self.model([input_x_t, input_o_t])
 
-class StudentValueNetwork(Network):
+class StudentValueANN(ANN):
     pass

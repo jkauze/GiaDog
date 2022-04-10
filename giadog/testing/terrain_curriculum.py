@@ -3,8 +3,8 @@ sys.path.append(os.path.dirname(os.path.realpath(f'{__file__}/..')))
 
 import pathlib
 import argparse
-from src.simulation.Simulation import *
-from src.training.TerrainCurriculum import *
+from src.simulation import Simulation
+from src.training import GiadogEnv, TerrainCurriculum
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -89,40 +89,16 @@ if __name__ == '__main__':
     sim = Simulation(args.spot_urdf, gui=args.gui)
 
     tc = TerrainCurriculum(
-        [TeacherEnv(sim)], 
-        train_method='',
+        [GiadogEnv(sim)], 
+        train_method='Test',
         _continue=False, 
-        testing=True
+        type=args.type,
+        epoch_to_show=args.epoch_to_show,
+        roughness=args.roughness,
+        frequency=args.frequency,
+        amplitude=args.amplitude,
+        width=args.width,
+        height=args.height
     )
-    
-    def artificial_trajectory_gen(p: Particle, k: int, m: int):
-        if p.type != args.type: return 
 
-        mean = (MAX_DESIRED_TRAV + MIN_DESIRED_TRAV) / 2
-        std = 0.0625
-
-        if p.type == 'hills':
-            fitness = abs(args.roughness - p.parameters['roughness']) / \
-                (HILLS_RANGE['roughness'][1] - HILLS_RANGE['roughness'][0])
-            fitness += abs(args.frequency - p.parameters['frequency']) / \
-                (HILLS_RANGE['frequency'][1] - HILLS_RANGE['frequency'][0])
-            fitness += abs(args.amplitude - p.parameters['amplitude']) / \
-                (HILLS_RANGE['amplitude'][1] - HILLS_RANGE['amplitude'][0])
-            fitness /= 3
-        elif p.type == 'steps':
-            fitness = abs(args.width - p.parameters['width']) / \
-                (STEPS_RANGE['width'][1] - STEPS_RANGE['width'][0])
-            fitness += abs(args.height - p.parameters['height']) / \
-                (STEPS_RANGE['height'][1] - STEPS_RANGE['height'][0])
-            fitness /= 2
-        else:
-            fitness = abs(p.parameters['width'] - args.width) / \
-                (STAIRS_RANGE['width'][1] - STAIRS_RANGE['width'][0])
-            fitness += abs(args.height - p.parameters['height']) / \
-                (STAIRS_RANGE['height'][1] - STAIRS_RANGE['height'][0])
-            fitness /= 2
-
-        mean += fitness
-        p.traverability[k * N_TRAJ + m] = np.clip(np.random.normal(mean, std), 0, 1)
-
-    tc.train(artificial_trajectory_gen, args.type, args.show_every)
+    tc.train()
