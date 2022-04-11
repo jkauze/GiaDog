@@ -103,6 +103,10 @@ class Simulation(object):
         self.gravity_vector     = GRAVITY_VECTOR
         self.angular_vel        = np.zeros([3])
         self.linear_vel         = np.zeros([3])
+        self.linear_vel_prev    = np.zeros([3])
+        self.body_angular_vel   = np.zeros([3])
+        self.body_linear_vel    = np.zeros([3])
+        self.linear_acc         = np.zeros([3])
         self.joint_angles       = np.zeros([12]) 
         self.joint_velocities   = np.zeros([12])
         self.toes_contact       = np.zeros([4], dtype=np.int8)
@@ -446,11 +450,39 @@ class Simulation(object):
 
     def update_base_velocity(self):
         """
-            Updates the base linear and angular velocity for the current simulation step.
+            Updates the base linear and angular velocity for the current 
+            simulation step.
         """
+
+        self.linear_vel_prev = self.linear_vel
+
         self.linear_vel, self.angular_vel  = np.array(
             self.p.getBaseVelocity(self.quadruped)
         )
+    
+    def update_acceleration(self):
+        """
+            Update the acceleration of the quadruped, by differentiating the 
+            velocity.
+        """
+
+        self.linear_acc = (self.linear_vel - self.linear_vel_prev)\
+                        /SIM_SECONDS_PER_STEP
+
+    def update_body_velocity(self):
+        """
+            Updates the body linear and angular velocity for the current 
+            simulation step.
+            Applies a trnaformation matrix to the body linear and angular
+            velocities.
+        """
+
+        R_world_body = get_rotation_matrix_from_euler(self.orientation)
+
+        self.body_linear_vel = np.dot(R_world_body, self.linear_vel)
+
+        self.body_angular_vel = np.dot(R_world_body, self.angular_vel)
+        
 
     def update_joints_sensors(self):
         """
@@ -577,7 +609,7 @@ class Simulation(object):
         """
             Update the transformation matrices from the hip to the leg base.
         """
-        self.transf_matrices = transformations_matrices(self.orientation)
+        self.transf_matrices = transformation_matrices(self.orientation)
 
     def update_is_fallen(self):
         """
@@ -600,6 +632,9 @@ class Simulation(object):
             self.p.getQuaternionFromEuler(self.orientation)
         )
         self.is_fallen = rot_mat[8] < 0.55
+
+    
+
 
     def update_sensor_output(self):
         """
@@ -643,6 +678,10 @@ class Simulation(object):
         self.update_external_force()
         self.update_transf_matrices()
         self.update_is_fallen()
+
+        # Testing
+        self.update_body_velocity()
+        self.update_acceleration()
 
     # ========================= TESTING FUNCTIONS ========================= #
     def __create_vector(
@@ -1546,7 +1585,7 @@ class Simulation(object):
                 foot_trajectories_debug(nn_output, self.timestep,
                                             sigma_0 = sigma_0,
                                             f_0=base_frequency)
-        T_list = transformations_matrices(self.orientation)
+        T_list = transformation_matrices(self.orientation)
         
         for i in range(4):
             r_Hip = np.array(self.p.getLinkState(self.quadruped, 
