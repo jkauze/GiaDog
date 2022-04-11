@@ -101,11 +101,14 @@ class Simulation(object):
 
         # Non-priviliged data
         self.gravity_vector     = GRAVITY_VECTOR
+        # Velocity in world frame
+        self.wf_angular_vel     = np.zeros([3])
+        self.wf_linear_vel      = np.zeros([3])
+        self.wf_linear_vel_prev = np.zeros([3])
+        # Acceleration in world frame
         self.angular_vel        = np.zeros([3])
+        # Velocity in robot frame
         self.linear_vel         = np.zeros([3])
-        self.linear_vel_prev    = np.zeros([3])
-        self.body_angular_vel   = np.zeros([3])
-        self.body_linear_vel    = np.zeros([3])
         self.linear_acc         = np.zeros([3])
         self.joint_angles       = np.zeros([12]) 
         self.joint_velocities   = np.zeros([12])
@@ -448,40 +451,42 @@ class Simulation(object):
         self.orientation = self.p.getEulerFromQuaternion(self.orientation)
         self.orientation = np.array(self.orientation)
 
-    def update_base_velocity(self):
-        """
-            Updates the base linear and angular velocity for the current 
-            simulation step.
-        """
-
-        self.linear_vel_prev = self.linear_vel
-
-        self.linear_vel, self.angular_vel  = np.array(
-            self.p.getBaseVelocity(self.quadruped)
-        )
+    
     
     def update_acceleration(self):
         """
             Update the acceleration of the quadruped, by differentiating the 
-            velocity.
+            velocity (expressed in the worldframe).
         """
 
-        self.linear_acc = (self.linear_vel - self.linear_vel_prev)\
-                        /SIM_SECONDS_PER_STEP
+        self.wf_linear_vel_prev = self.wf_linear_vel
 
-    def update_body_velocity(self):
+        self.wf_linear_vel, self.wf_angular_vel  = np.array(
+            self.p.getBaseVelocity(self.quadruped)
+        )
+
+        self.linear_acc = (self.linear_vel - self.wf_linear_vel_prev)\
+                        /SIM_SECONDS_PER_STEP
+    
+
+    def update_base_velocity(self):
         """
             Updates the body linear and angular velocity for the current 
             simulation step.
-            Applies a trnaformation matrix to the body linear and angular
+            
+            Applies a transformation matrix to the body linear and angular
             velocities.
+
+            Note: Must be called after updating the acceleration, and the 
+            orientation of the quadruped.
         """
 
         R_world_body = get_rotation_matrix_from_euler(self.orientation)
 
-        self.body_linear_vel = np.dot(R_world_body, self.linear_vel)
+        self.linear_vel = np.dot(R_world_body, self.wf_linear_vel)
 
-        self.body_angular_vel = np.dot(R_world_body, self.angular_vel)
+        self.angular_vel = np.dot(R_world_body, self.wf_angular_vel)
+        
         
 
     def update_joints_sensors(self):
@@ -668,6 +673,7 @@ class Simulation(object):
                 * joint_torques
         """
         self.update_position_orientation()
+        self.update_acceleration()
         self.update_base_velocity()
         self.update_joints_sensors()
         self.update_toes_contact_info()
@@ -678,10 +684,7 @@ class Simulation(object):
         self.update_external_force()
         self.update_transf_matrices()
         self.update_is_fallen()
-
-        # Testing
-        self.update_body_velocity()
-        self.update_acceleration()
+        
 
     # ========================= TESTING FUNCTIONS ========================= #
     def __create_vector(
