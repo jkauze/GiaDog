@@ -19,7 +19,11 @@ import numpy as np
 
 
 
-def plot_reward_live(reward, first_exec = False):
+def plot_reward_live(reward, 
+                    first_exec = False,
+                    save_plot = False, 
+                    save_path = None, 
+                    )->None:
     """
         Function to plot the cumulative reward, of each epoch during the 
         training.
@@ -46,6 +50,10 @@ def plot_reward_live(reward, first_exec = False):
     plt.ylabel('reward')
     plt.title('Cumulative reward')
     plt.draw()
+    
+    if save_plot:
+        plt.savefig(save_path)
+    
     plt.pause(0.0001)
     plt.clf()
 
@@ -57,6 +65,8 @@ if __name__ == '__main__':
     reward = [0]
 
     plot_reward_live(reward, first_exec = True)
-    for i in range(1000):
+    for i in range(100):
         reward.append(reward[-1] + np.random.random() * 0.90 **i)
         plot_reward_live(reward)
+    reward.append(reward[-1] + np.random.random() * 0.90 **i)
+    plot_reward_live(reward, save_plot = True, save_path = 'test.png')
