@@ -965,7 +965,7 @@ class Simulation(object):
         if first_exec: self.vector_id = self.__create_vector(r_o, r_f)
         else: self.__update_vector(self.vector_id, r_o, r_f)
 
-    def test_linear_velocity(self, first_exec: bool=False):
+    def test_linear_velocity_acceleration(self, first_exec: bool=False):
         """
             Test the linear velocity of the robot by forcing it to move 
             horizontally given the velocity parameters given by the user, thus 
@@ -1004,12 +1004,19 @@ class Simulation(object):
             self.pos_y = 0
         else: 
             self.p.removeBody(self.linear_vel_id)
+            self.p.removeBody(self.linear_acc_id)
 
         # Create vectors
         self.linear_vel_id = self.__create_vector(
             self.position, 
             self.position + self.linear_vel,
             np.linalg.norm(self.linear_vel) / 5,
+            *(0, 0, 1)
+        )
+        self.linear_acc_id = self.__create_vector(
+            self.position, 
+            self.position + self.linear_acc,
+            np.linalg.norm(self.linear_acc) / 5,
             *(1, 0, 0)
         )
 
@@ -1053,7 +1060,7 @@ class Simulation(object):
                 self.p.JOINT_FIXED, 
                 None, 
                 None, 
-                [0, 0, 2],
+                [1, 1, 2],
                 self.p.getQuaternionFromEuler([0,0,0])
             )
 

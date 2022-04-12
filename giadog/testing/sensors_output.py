@@ -26,21 +26,25 @@ if __name__ == '__main__':
         const=True, 
         help='',
     )
+    sensors = [
+        'position-orientation',
+        'linear-velocity-acceleration',
+        'angular-velocity',
+        'joints-data',
+        'toes-contact',
+        'thighs-shanks-contact',
+        'desired-direction',
+        'friction',
+        'height-scan'
+    ]
+    sensors_txt = ''
+    for s in sensors[:-1]: sensors_txt += f'"{s}", '
+    sensors_txt += f'"{sensors[-1]}"'
     parser.add_argument(
         '-s', '---sensor',
-        choices=[
-            'position-orientation',
-            'linear-velocity',
-            'angular-velocity',
-            'joints-data',
-            'toes-contact',
-            'thighs-shanks-contact',
-            'desired-direction',
-            'friction',
-            'height-scan'
-        ],
+        choices=sensors,
         default='position-orientation',
-        help='Sensor to test.',
+        help='Sensor to test. Available values: ' + sensors_txt,
         metavar='SENSOR'
     )
 
@@ -51,9 +55,9 @@ if __name__ == '__main__':
     if args.sensor == 'position-orientation': 
         sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_position_orientation
-    elif args.sensor == 'linear-velocity':
+    elif args.sensor == 'linear-velocity-acceleration':
         sim.reset('terrains/initial_hills.txt')
-        test_function = sim.test_linear_velocity
+        test_function = sim.test_linear_velocity_acceleration
     elif args.sensor == 'angular-velocity':
         sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_angular_velocity
