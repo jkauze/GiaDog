@@ -477,7 +477,7 @@ class Simulation(object):
             self.p.getBaseVelocity(self.quadruped)
         )
         self.linear_acc = self.__add_noise(
-            (self.linear_vel - self.wf_linear_vel_prev) / SIM_SECONDS_PER_STEP,
+            (self.wf_linear_vel - self.wf_linear_vel_prev) / SIM_SECONDS_PER_STEP,
             ACCELERATION_NOISE
         )
 
@@ -1033,6 +1033,59 @@ class Simulation(object):
 
         self.pos_x += self.p.readUserDebugParameter(self.vel_x_id)
         self.pos_y += self.p.readUserDebugParameter(self.vel_y_id)
+
+        # Reset joint positions
+        for ID in JOINTS_IDS:
+            self.p.resetJointState(self.quadruped, ID, 0)
+    
+
+    def test_acceleration_free_fall(self, first_exec: bool=False):
+        """
+            Test the linear velocity of the robot by forcing it to move 
+            horizontally given the velocity parameters given by the user, thus 
+            showing the linear velocity arrow as a consequence of the movement.
+
+            Arguments:
+            ----------
+                first_exec: bool
+                    if True, the parameters are initialized.
+        """
+        if first_exec: 
+        
+            # Rese state
+            self.reset_id = self.p.addUserDebugParameter('Reset', 1, 0, 0)
+            self.reset_count = 0
+
+        else: 
+            #self.p.removeBody(self.linear_vel_id)
+            self.p.removeBody(self.linear_acc_id)
+
+        # Create vectors
+        """
+        self.linear_vel_id = self.__create_vector(
+            self.position, 
+            self.position + self.linear_vel,
+            np.linalg.norm(self.linear_vel) / 5,
+            *(0, 0, 1)
+        )
+        """
+        self.linear_acc_id = self.__create_vector(
+            self.position, 
+            self.position + self.linear_acc,
+            np.linalg.norm(self.linear_acc) / 25,
+            *(1, 0, 0)
+        )
+
+        # Reset position
+        if self.reset_count != self.p.readUserDebugParameter(self.reset_id):
+            self.reset_count = self.p.readUserDebugParameter(self.reset_id)
+            self.pos_x = self.pos_y = 0
+
+            # Update position constraint
+
+            self.p.resetBasePositionAndOrientation(self.quadruped,
+                                                    [0,0,1],
+                                                    [0,0,0,1])
 
         # Reset joint positions
         for ID in JOINTS_IDS:

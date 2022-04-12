@@ -29,6 +29,7 @@ if __name__ == '__main__':
     sensors = [
         'position-orientation',
         'linear-velocity-acceleration',
+        'accelerometer',
         'angular-velocity',
         'joints-data',
         'toes-contact',
@@ -58,6 +59,9 @@ if __name__ == '__main__':
     elif args.sensor == 'linear-velocity-acceleration':
         sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_linear_velocity_acceleration
+    elif args.sensor == 'accelerometer':
+        sim.reset('terrains/initial_hills.txt')
+        test_function = sim.test_acceleration_free_fall
     elif args.sensor == 'angular-velocity':
         sim.reset('terrains/initial_hills.txt')
         test_function = sim.test_angular_velocity
