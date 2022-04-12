@@ -11,19 +11,23 @@ import numpy as np
 from time import sleep, time
 from typing import List, Tuple, Callable
 from terrain_gen import steps, set_goal, save_terrain
-from __env__ import MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
+from __env__ import EPSILON, MESH_SCALE, GRAVITY_VECTOR, SIM_SECONDS_PER_STEP, \
     TOES_IDS, EXTERNAL_FORCE_MAGN, JOINTS_IDS, THIGHS_IDS, SHANKS_IDS, \
-    HIPS_IDS, EXTERNAL_FORCE_TIME, ROWS, COLS 
+    HIPS_IDS, EXTERNAL_FORCE_TIME, ROWS, COLS, ANGULAR_VEL_NOISE, \
+    ORIENTATION_NOISE, VELOCITY_NOISE, ACCELERATION_NOISE, \
+    JOINT_ANGLE_NOISE, JOINT_VELOCITY_NOISE
 
 # Simulacion
 import pybullet as p
 import pybullet_utils.bullet_client as bc
 from bullet_dataclasses import ContactInfo, JointState, LinkState
-from kinematics import foot_trajectories, solve_leg_IK, transformations_matrices
+from kinematics import transformation_matrices, solve_leg_IK, \
+    rotation_matrix_from_euler, foot_trajectories_debug
 
 
 class Simulation(object):
     """ Control and monitor the simulation of the spot-mini in pybullet. """
+
     def __init__(
             self,
             giadog_urdf_file: str,
@@ -134,6 +138,7 @@ class Simulation(object):
 
         self.initial_time = time() 
         self.timestep = self.initial_time
+        self.dt = 0
 
     @staticmethod
     def __foot_scan_coordinates(x: float, y: float, alpha: float) -> np.array:
@@ -251,8 +256,6 @@ class Simulation(object):
         # Set random external force
         self.__set_external_force()
         self.external_force_applied = False
-
-        
 
     def __apply_force(self, F: List[float]):
         """
@@ -382,6 +385,7 @@ class Simulation(object):
         except Exception as e:
             print(f'\033[1;93m[w]\033[0m {e}.')
 
+
     # =========================== UPDATE FUNCTIONS =========================== #
     @staticmethod
     def __contact_info_average(
@@ -432,15 +436,24 @@ class Simulation(object):
 
         return (contact_force_mag, fricction_coefficient, contact_force)
 
+    def __add_noise(self, data: np.array, std: float) -> np.array:
+        """
+            Add noise to data obtained from a sensor.
+            
+
+        """
+        return data + np.random.normal(0, std, data.shape)
+    
     def step(self):
         """
             Next frame in the simulation.
         """
         if self.real_step:
-            self.timestep = time() - self.initial_time
+            self.dt = time() - self.timestep - self.initial_time
         else:
             self.p.stepSimulation()
-            self.timestep += SIM_SECONDS_PER_STEP
+            self.dt = SIM_SECONDS_PER_STEP
+        self.timestep += self.dt
 
     def update_position_orientation(self):
         """
@@ -449,25 +462,24 @@ class Simulation(object):
         self.position, self.orientation = \
             self.p.getBasePositionAndOrientation(self.quadruped)
         self.orientation = self.p.getEulerFromQuaternion(self.orientation)
-        self.orientation = np.array(self.orientation)
+        self.orientation = self.__add_noise(
+            np.array(self.orientation),
+            ORIENTATION_NOISE
+        )
 
-    
-    
     def update_acceleration(self):
         """
             Update the acceleration of the quadruped, by differentiating the 
             velocity (expressed in the worldframe).
         """
-
         self.wf_linear_vel_prev = self.wf_linear_vel
-
         self.wf_linear_vel, self.wf_angular_vel  = np.array(
             self.p.getBaseVelocity(self.quadruped)
         )
-
-        self.linear_acc = (self.linear_vel - self.wf_linear_vel_prev)\
-                        /SIM_SECONDS_PER_STEP
-    
+        self.linear_acc = self.__add_noise(
+            (self.linear_vel - self.wf_linear_vel_prev) / SIM_SECONDS_PER_STEP,
+            ACCELERATION_NOISE
+        )
 
     def update_base_velocity(self):
         """
@@ -480,14 +492,15 @@ class Simulation(object):
             Note: Must be called after updating the acceleration, and the 
             orientation of the quadruped.
         """
-
-        R_world_body = get_rotation_matrix_from_euler(self.orientation)
-
-        self.linear_vel = np.dot(R_world_body, self.wf_linear_vel)
-
-        self.angular_vel = np.dot(R_world_body, self.wf_angular_vel)
-        
-        
+        R_world_body = rotation_matrix_from_euler(self.orientation)
+        self.linear_vel = self.__add_noise(
+            np.dot(R_world_body, self.wf_linear_vel),
+            VELOCITY_NOISE * self.dt 
+        )
+        self.angular_vel = self.__add_noise(
+            np.dot(R_world_body, self.wf_angular_vel),
+            ANGULAR_VEL_NOISE
+        )
 
     def update_joints_sensors(self):
         """
@@ -500,8 +513,14 @@ class Simulation(object):
         )
         for i, j_state in enumerate(joint_states):
             j_state = JointState(*j_state)
-            self.joint_angles[i]     = j_state.jointPosition
-            self.joint_velocities[i] = j_state.jointVelocity
+            self.joint_angles[i]     = self.__add_noise(
+                np.array(j_state.jointPosition),
+                JOINT_ANGLE_NOISE
+            )
+            self.joint_velocities[i] = self.__add_noise(
+                np.array(j_state.jointVelocity),
+                JOINT_VELOCITY_NOISE / (self.dt + EPSILON)
+            )
             self.joint_torques[i]    = j_state.appliedJointMotorTorque
 
     def update_toes_contact_info(self):
@@ -637,9 +656,6 @@ class Simulation(object):
             self.p.getQuaternionFromEuler(self.orientation)
         )
         self.is_fallen = rot_mat[8] < 0.55
-
-    
-
 
     def update_sensor_output(self):
         """
@@ -1620,7 +1636,6 @@ class Simulation(object):
             
         self.actuate_joints(self.joints_angles)
 
-
     def test_IK(self, first_exec: bool=False):
         """
         
@@ -1707,7 +1722,6 @@ class Simulation(object):
 
 
         self.actuate_joints(self.objective_joint_angles)
-            
 
     def test(self, test_function: Callable):
         """

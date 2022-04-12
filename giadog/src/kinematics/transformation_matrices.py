@@ -9,7 +9,7 @@ from typing import List
 from __env__ import H_OFF, LEG_SPAN
 
 
-def get_rotation_matrix_from_euler(theta) :
+def rotation_matrix_from_euler(theta: np.array) -> np.array:
     """
         Calculates a rotation matrix from the euler angles.
 
@@ -71,7 +71,7 @@ def transformation_matrices(base_rpy: np.array) -> List[np.array]:
         # We calculate the Hi frame  relative to the leg base position (hip)
         p_li_Hi = np.array([0, H_OFF * (-1)**i, -LEG_SPAN])
         # We do the same for the leg base orientation
-        R_li_Hi = get_rotation_matrix_from_euler([base_roll, base_pitch, 0])
+        R_li_Hi = rotation_matrix_from_euler([base_roll, base_pitch, 0])
 
         # Finally we concatenate the rotation matrix and position vector
         # To get the transformation matrix of the Hi horizontal frame expressed
