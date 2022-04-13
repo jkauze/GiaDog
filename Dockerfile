@@ -2,11 +2,12 @@ FROM ros:noetic
 
 SHELL ["/bin/bash", "-c"]
 
-# Create work directory
+# Setup env
 ENV GIADOG_DIR '/usr/src/GiaDog'
-RUN mkdir -p ${GIADOG_DIR}
+
+# Create work directory
 WORKDIR ${GIADOG_DIR}
-COPY .env.json ${GIADOG_DIR}/
+COPY .env.json .
 
 # Install dependencies
 RUN (apt update && \
@@ -22,4 +23,4 @@ RUN (apt update && \
             tensorflow keras-tcn nvidia-cuda-toolkit; \
     done
 
-COPY .env.json ${GIADOG_DIR}/
+COPY .env.json .
